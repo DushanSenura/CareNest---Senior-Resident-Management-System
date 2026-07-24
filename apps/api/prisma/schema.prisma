@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ResidentStatus {
+  ACTIVE
+  HOSPITALIZED
+  RESPITE
+  DISCHARGED
+  DECEASED
+}
+
+enum CarePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+}
+
+enum IncidentSeverity {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+enum StaffStatus {
+  ACTIVE
+  ON_LEAVE
+  SUSPENDED
+  INACTIVE
+}
+
+model Facility {
+  id        String     @id @default(cuid())
+  name      String
+  timezone  String     @default("Asia/Colombo")
+  residents Resident[]
+  staff     Staff[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Resident {
+  id               String         @id @default(cuid())
+  facilityId       String
+  facility         Facility       @relation(fields: [facilityId], references: [id])
+  firstName        String
+  lastName         String
+  preferredName    String?
+  dateOfBirth      DateTime
+  room             String
+  status           ResidentStatus @default(ACTIVE)
+  priority         CarePriority   @default(MEDIUM)
+  photoUrl         String?
+  allergies        String[]
+  dietaryNeeds     String[]
+  emergencyName    String
+  emergencyPhone   String
+  admissionDate    DateTime
+  carePlans        CarePlan[]
+  medications      Medication[]
+  incidents        Incident[]
+  tasks            CareTask[]
+  observations     Observation[]
+  documents        Document[]
+  admissionProfile AdmissionProfile?
+  dailyHealthReports DailyHealthReport[]
+  guestAccounts    Staff[]         @relation("ResidentGuest")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  @@index([facilityId, status])
+  @@index([lastName, firstName])
+}
+
+model DailyHealthReport {
+  id              String   @id @default(cuid())
+  residentId      String
+  resident        Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  reportDate      DateTime
+  recordedBy      String
+  bloodPressure   String?
+  pulse           Int?
+  temperature     Float?
+  oxygenSaturation Int?
+  respiratoryRate Int?
+  bloodGlucose    Float?
+  weight          Float?
+  painLevel       Int?
+  mood            String?
+  appetite        String?
+  hydration       String?
+  sleepQuality    String?
+  mobility        String?
+  bowelStatus     String?
+  urinaryStatus   String?
+  skinCondition   String?
+  medicationTaken Boolean  @default(true)
+  healthChange    Boolean  @default(false)
+  concerns        String?
+  actionsTaken    String?
+  notes           String?
+  escalation      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@unique([residentId, reportDate])
+  @@index([reportDate])
+}
+
+model AdmissionProfile {
+  id                    String   @id @default(cuid())
+  residentId            String   @unique
+  resident              Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  admissionId           String   @unique
+  applicationDate       DateTime @default(now())
+  admissionDate         DateTime
+  admissionTime         String
+  admissionType         String
+  admissionStatus       String   @default("DRAFT")
+  branch                String?
+  building              String?
+  floor                 String?
+  expectedLengthOfStay  String?
+  referralSource        String?
+  admissionOfficer      String?
+  careManager           String?
+  primaryCaregiver      String?
+  personalInformation   Json     @default("{}")
+  contacts              Json     @default("[]")
+  guardianLegal         Json     @default("{}")
+  medicalInformation    Json     @default("{}")
+  allergies             Json     @default("[]")
+  medicationInformation Json     @default("[]")
+  mobilityAssistance    Json     @default("{}")
+  dailyLiving           Json     @default("{}")
+  cognitiveMentalHealth Json     @default("{}")
+  communicationSensory  Json     @default("{}")
+  nutritionDietary      Json     @default("{}")
+  continenceToileting   Json     @default("{}")
+  personalCare          Json     @default("{}")
+  socialLifestyle       Json     @default("{}")
+  behaviourSafety       Json     @default("{}")
+  accommodation         Json     @default("{}")
+  financialBilling      Json     @default("{}")
+  admissionAssessment   Json     @default("{}")
+  requiredServices      Json     @default("{}")
+  documentsUploads      Json     @default("[]")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Staff {
+  id         String     @id @default(cuid())
+  facilityId String
+  facility   Facility   @relation(fields: [facilityId], references: [id])
+  firstName  String
+  lastName   String
+  email      String     @unique
+  passwordHash String?
+  mustChangePassword Boolean @default(false)
+  role       String
+  phone      String?
+  employeeId String?    @unique
+  status     StaffStatus @default(ACTIVE)
+  department String?
+  shift      String?
+  hireDate   DateTime?
+  address    String?
+  emergencyContact String?
+  preferredName String?
+  branch String?
+  jobTitle String?
+  workPhone String?
+  dateOfBirth DateTime?
+  gender String?
+  preferredLanguage String? @default("English")
+  timezone String? @default("Asia/Colombo")
+  biography String?
+  username String? @unique
+  displayName String?
+  preferredLoginEmail String?
+  emailVerified Boolean @default(false)
+  phoneVerified Boolean @default(false)
+  lastLoginAt DateTime?
+  lastPasswordChangeAt DateTime?
+  profilePhotoUrl String?
+  linkedResidentId String?
+  linkedResident Resident? @relation("ResidentGuest", fields: [linkedResidentId], references: [id], onDelete: Cascade)
+  preferences UserPreference?
+  loginSessions LoginSession[]
+  tasks      CareTask[]
+  incidents  Incident[]
+  shifts     StaffShift[]
+  createdAt  DateTime   @default(now())
+}
+
+model UserPreference {
+  id        String   @id @default(cuid())
+  staffId   String   @unique
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  settings  Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+model LoginSession {
+  id           String   @id @default(cuid())
+  staffId      String
+  staff        Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  deviceName   String
+  browser      String?
+  operatingSystem String?
+  ipAddress    String?
+  loginAt      DateTime @default(now())
+  lastActivity DateTime @default(now())
+  revokedAt    DateTime?
+  @@index([staffId, revokedAt])
+}
+
+model StaffShift {
+  id         String   @id @default(cuid())
+  staffId    String
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  shiftDate  DateTime
+  startTime  String
+  endTime    String
+  shiftType  String
+  unit       String?
+  notes      String?
+  status     String   @default("SCHEDULED")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([shiftDate, status])
+}
+
+model CarePlan {
+  id         String       @id @default(cuid())
+  residentId String
+  resident   Resident     @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  title      String
+  goals      String
+  guidance   String
+  priority   CarePriority @default(MEDIUM)
+  reviewDate DateTime
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}
+
+model Medication {
+  id          String   @id @default(cuid())
+  residentId  String
+  resident    Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  name        String
+  genericName String?
+  strength    String?
+  dosage      String
+  route       String
+  frequency   String
+  instructions String?
+  prescribingDoctor String?
+  reason      String?
+  stockQuantity Int   @default(0)
+  stockUnit   String   @default("tablets")
+  reorderLevel Int    @default(10)
+  supplier    String?
+  batchNumber String?
+  expiryDate  DateTime?
+  active      Boolean  @default(true)
+  startsAt    DateTime
+  endsAt      DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model CareTask {
+  id          String     @id @default(cuid())
+  residentId  String
+  resident    Resident   @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  assigneeId  String?
+  assignee    Staff?     @relation(fields: [assigneeId], references: [id])
+  title       String
+  category    String
+  dueAt       DateTime
+  status      TaskStatus @default(PENDING)
+  notes       String?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  @@index([dueAt, status])
+}
+
+model Incident {
+  id          String           @id @default(cuid())
+  residentId  String
+  resident    Resident         @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  reportedById String
+  reportedBy  Staff            @relation(fields: [reportedById], references: [id])
+  type        String
+  severity    IncidentSeverity
+  occurredAt  DateTime
+  location    String
+  description String
+  actions     String
+  createdAt   DateTime         @default(now())
+}
+
+model Observation {
+  id          String   @id @default(cuid())
+  residentId  String
+  resident    Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  type        String
+  value       String
+  unit        String?
+  notes       String?
+  recordedAt  DateTime @default(now())
+}
+
+model Document {
+  id         String   @id @default(cuid())
+  residentId String
+  resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  name       String
+  category   String
+  objectKey  String   @unique
+  mimeType   String
+  size       Int
+  createdAt  DateTime @default(now())
+}

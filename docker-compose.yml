@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: carenest
+      POSTGRES_USER: carenest
+      POSTGRES_PASSWORD: carenest
+    ports: ["5433:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carenest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: [redis_data:/data]
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: carenest
+      MINIO_ROOT_PASSWORD: carenest-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio_data:/data]
+  create-bucket:
+    image: minio/mc:latest
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "sleep 3; mc alias set local http://minio:9000 carenest carenest-secret;
+      mc mb --ignore-existing local/carenest; mc anonymous set download local/carenest; exit 0;"
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

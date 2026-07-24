@@ -1,0 +1,12 @@
+{
+  "extends": "../../packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "outDir": "./dist",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts"]
+}

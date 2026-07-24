@@ -1,0 +1,22 @@
+{
+  "name": "carenest",
+  "private": true,
+  "packageManager": "npm@11.17.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "db:generate": "npm run prisma:generate --workspace=@carenest/api",
+    "db:migrate": "npm run prisma:migrate --workspace=@carenest/api",
+    "db:seed": "npm run prisma:seed --workspace=@carenest/api"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
