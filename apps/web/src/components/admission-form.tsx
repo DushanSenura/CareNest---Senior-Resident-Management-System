@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { authHeaders } from "@/lib/api";
 import { Button } from "./ui";
 
 type Section = {
@@ -576,7 +577,7 @@ export function AdmissionForm() {
         `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/residents`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: authHeaders(true),
           body: JSON.stringify({
             facilityId: "demo-facility",
             firstName: personal.firstName,

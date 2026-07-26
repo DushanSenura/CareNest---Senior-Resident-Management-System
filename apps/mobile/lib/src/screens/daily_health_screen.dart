@@ -13,19 +13,29 @@ class DailyHealthScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reports = ref.watch(healthReportsProvider);
+    final role = ref.watch(sessionProvider).account?.role;
+    final canCreate = {
+      'Caregiver',
+      'Care Manager',
+      'HR Manager',
+      'Admin',
+      'Super Admin',
+    }.contains(role);
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'health-report',
-        onPressed: () => showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          useSafeArea: true,
-          builder: (_) => const _HealthReportForm(),
-        ),
-        icon: const Icon(Icons.add),
-        label: const Text('Health check'),
-      ),
+      floatingActionButton: !canCreate
+          ? null
+          : FloatingActionButton.extended(
+              heroTag: 'health-report',
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                builder: (_) => const _HealthReportForm(),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Health check'),
+            ),
       body: reports.when(
         data: (items) {
           if (items.isEmpty) {
@@ -158,12 +168,14 @@ class _HealthCard extends StatelessWidget {
   }
 }
 
-class _HealthReportDetails extends StatelessWidget {
+class _HealthReportDetails extends ConsumerWidget {
   const _HealthReportDetails({required this.record});
   final DailyHealthRecord record;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final account = ref.watch(sessionProvider).account;
+    final canEdit = record.isEditableDraft && record.createdById == account?.id;
     final observations = <(String, String?)>[
       ('Blood pressure', record.bloodPressure),
       ('Pulse', record.pulse == null ? null : '${record.pulse} bpm'),
@@ -226,6 +238,27 @@ class _HealthReportDetails extends StatelessWidget {
             'Daily health report · ${DateFormat.yMMMMd().format(record.reportDate)}',
             style: const TextStyle(color: CareNestColors.sage),
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              StatusPill(record.status == 'DRAFT' ? 'Draft' : 'Submitted'),
+              const Spacer(),
+              if (canEdit)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      builder: (_) => _HealthReportForm(record: record),
+                    );
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Edit draft'),
+                ),
+            ],
+          ),
           const SizedBox(height: 22),
           const SectionHeading('Clinical observations'),
           const SizedBox(height: 8),
@@ -283,7 +316,8 @@ class _HealthReportDetails extends StatelessWidget {
 }
 
 class _HealthReportForm extends ConsumerStatefulWidget {
-  const _HealthReportForm();
+  const _HealthReportForm({this.record});
+  final DailyHealthRecord? record;
 
   @override
   ConsumerState<_HealthReportForm> createState() => _HealthReportFormState();
@@ -323,6 +357,43 @@ class _HealthReportFormState extends ConsumerState<_HealthReportForm> {
   bool _medicationTaken = true;
   bool _healthChange = false;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final record = widget.record;
+    if (record == null) return;
+    _residentId = null;
+    _reportDate = record.reportDate;
+    _medicationTaken = record.medicationTaken;
+    _healthChange = record.healthChange;
+    final text = <String, Object?>{
+      'bloodPressure': record.bloodPressure,
+      'pulse': record.pulse,
+      'temperature': record.temperature,
+      'oxygenSaturation': record.oxygenSaturation,
+      'respiratoryRate': record.respiratoryRate,
+      'bloodGlucose': record.bloodGlucose,
+      'weight': record.weight,
+      'painLevel': record.painLevel,
+      'concerns': record.concerns,
+      'actionsTaken': record.actionsTaken,
+      'notes': record.notes,
+      'escalation': record.escalation,
+    };
+    for (final entry in text.entries) {
+      _controllers[entry.key]!.text = entry.value?.toString() ?? '';
+    }
+    _wellbeing
+      ..['mood'] = record.mood
+      ..['appetite'] = record.appetite
+      ..['hydration'] = record.hydration
+      ..['sleepQuality'] = record.sleepQuality
+      ..['mobility'] = record.mobility
+      ..['bowelStatus'] = record.bowelStatus
+      ..['urinaryStatus'] = record.urinaryStatus
+      ..['skinCondition'] = record.skinCondition;
+  }
 
   @override
   void dispose() {
@@ -368,26 +439,33 @@ class _HealthReportFormState extends ConsumerState<_HealthReportForm> {
             const SizedBox(height: 22),
             const SectionHeading('Report information'),
             const SizedBox(height: 10),
-            residents.when(
-              data: (items) => DropdownButtonFormField<String>(
-                initialValue: _residentId,
-                decoration: const InputDecoration(labelText: 'Resident *'),
-                items: items
-                    .where((item) => item.status == 'ACTIVE')
-                    .map(
-                      (item) => DropdownMenuItem(
-                        value: item.id,
-                        child: Text('${item.displayName} · ${item.room}'),
+            widget.record != null
+                ? InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Resident'),
+                    child: Text(widget.record!.residentName),
+                  )
+                : residents.when(
+                    data: (items) => DropdownButtonFormField<String>(
+                      initialValue: _residentId,
+                      decoration: const InputDecoration(
+                        labelText: 'Resident *',
                       ),
-                    )
-                    .toList(),
-                onChanged: (value) => setState(() => _residentId = value),
-                validator: (value) =>
-                    value == null ? 'Select an active resident' : null,
-              ),
-              loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text(error.toString()),
-            ),
+                      items: items
+                          .where((item) => item.status == 'ACTIVE')
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item.id,
+                              child: Text('${item.displayName} · ${item.room}'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setState(() => _residentId = value),
+                      validator: (value) =>
+                          value == null ? 'Select an active resident' : null,
+                    ),
+                    loading: () => const LinearProgressIndicator(),
+                    error: (error, _) => Text(error.toString()),
+                  ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: _selectDate,
@@ -478,14 +556,24 @@ class _HealthReportFormState extends ConsumerState<_HealthReportForm> {
             _textArea('escalation', 'Escalation'),
             const SizedBox(height: 18),
             FilledButton.icon(
-              onPressed: _saving ? null : () => _save(account.fullName),
+              onPressed: _saving
+                  ? null
+                  : () => _save(account.fullName, 'DRAFT'),
               icon: _saving
                   ? const SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_outlined),
-              label: const Text('Save complete health report'),
+              label: const Text('Save draft'),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: _saving
+                  ? null
+                  : () => _save(account.fullName, 'SUBMITTED'),
+              icon: const Icon(Icons.send_outlined),
+              label: const Text('Submit report'),
             ),
           ],
         ),
@@ -547,16 +635,19 @@ class _HealthReportFormState extends ConsumerState<_HealthReportForm> {
     if (selected != null) setState(() => _reportDate = selected);
   }
 
-  Future<void> _save(String recordedBy) async {
+  Future<void> _save(String recordedBy, String status) async {
     if (!_form.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
       final body = <String, dynamic>{
-        'residentId': _residentId,
+        'residentId': widget.record == null
+            ? _residentId
+            : widget.record!.residentId,
         'reportDate': DateFormat('yyyy-MM-dd').format(_reportDate),
         'recordedBy': recordedBy,
         'medicationTaken': _medicationTaken,
         'healthChange': _healthChange,
+        'status': status,
       };
       _putText(body, 'bloodPressure');
       for (final key in [
@@ -576,7 +667,12 @@ class _HealthReportFormState extends ConsumerState<_HealthReportForm> {
       for (final key in ['concerns', 'actionsTaken', 'notes', 'escalation']) {
         _putText(body, key);
       }
-      await ref.read(apiProvider).createHealthReport(body);
+      if (widget.record == null) {
+        await ref.read(apiProvider).createHealthReport(body);
+      } else {
+        body['residentId'] = widget.record!.residentId;
+        await ref.read(apiProvider).updateHealthReport(widget.record!.id, body);
+      }
       ref.invalidate(healthReportsProvider);
       if (mounted) Navigator.of(context).pop();
     } catch (error) {

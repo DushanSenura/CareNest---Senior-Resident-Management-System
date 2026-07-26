@@ -263,9 +263,11 @@ class DailyHealthRecord {
     required this.reportDate,
     required this.recordedBy,
     required this.residentName,
+    required this.residentId,
     required this.room,
     required this.medicationTaken,
     required this.healthChange,
+    required this.status,
     this.bloodPressure,
     this.pulse,
     this.temperature,
@@ -286,15 +288,25 @@ class DailyHealthRecord {
     this.actionsTaken,
     this.notes,
     this.escalation,
+    this.createdById,
+    this.editableUntil,
   });
 
   final String id;
   final DateTime reportDate;
   final String recordedBy;
   final String residentName;
+  final String residentId;
   final String room;
   final bool medicationTaken;
   final bool healthChange;
+  final String status;
+  final String? createdById;
+  final DateTime? editableUntil;
+  bool get isEditableDraft =>
+      status == 'DRAFT' &&
+      editableUntil != null &&
+      editableUntil!.isAfter(DateTime.now());
   final String? bloodPressure;
   final int? pulse;
   final double? temperature;
@@ -327,9 +339,13 @@ class DailyHealthRecord {
       residentName:
           '${resident['preferredName'] ?? resident['firstName'] ?? ''} ${resident['lastName'] ?? ''}'
               .trim(),
+      residentId: resident['id'] as String? ?? '',
       room: resident['room'] as String? ?? '—',
       medicationTaken: json['medicationTaken'] as bool? ?? false,
       healthChange: json['healthChange'] as bool? ?? false,
+      status: json['status'] as String? ?? 'SUBMITTED',
+      createdById: json['createdById'] as String?,
+      editableUntil: DateTime.tryParse(json['editableUntil'] as String? ?? ''),
       bloodPressure: json['bloodPressure'] as String?,
       pulse: json['pulse'] as int?,
       temperature: (json['temperature'] as num?)?.toDouble(),

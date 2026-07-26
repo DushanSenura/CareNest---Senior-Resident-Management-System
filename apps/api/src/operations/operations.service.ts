@@ -16,9 +16,9 @@ const MODULES = new Set([
 export class OperationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(facilityId: string, module: string, status?: string, search?: string) {
+  async list(facilityId: string, module: string, status?: string, search?: string) {
     this.assertModule(module);
-    return this.prisma.operationalRecord.findMany({
+    const records = await this.prisma.operationalRecord.findMany({
       where: {
         facilityId,
         module,
@@ -34,6 +34,44 @@ export class OperationsService {
       },
       orderBy: [{ eventAt: 'asc' }, { createdAt: 'desc' }],
     });
+    if (module !== 'audit-logs') return records;
+    const sessions = await this.prisma.loginSession.findMany({
+      where: {
+        staff: { facilityId },
+        ...(search ? {
+          OR: [
+            { staff: { firstName: { contains: search, mode: 'insensitive' } } },
+            { staff: { lastName: { contains: search, mode: 'insensitive' } } },
+            { staff: { email: { contains: search, mode: 'insensitive' } } },
+            { ipAddress: { contains: search, mode: 'insensitive' } },
+          ],
+        } : {}),
+      },
+      orderBy: { loginAt: 'desc' },
+      take: 100,
+      include: { staff: { select: { firstName: true, lastName: true, email: true, role: true } } },
+    });
+    const loginEvents = sessions.map((session) => ({
+      id: `login-${session.id}`,
+      facilityId,
+      module: 'audit-logs',
+      title: `LOGIN · ${session.staff.firstName} ${session.staff.lastName}`,
+      subtitle: `${session.staff.role} · ${session.staff.email} · ${session.deviceName}${session.ipAddress ? ` · ${session.ipAddress}` : ''}`,
+      status: session.revokedAt ? 'REVOKED' : 'SUCCESS',
+      data: {
+        action: 'LOGIN',
+        browser: session.browser,
+        operatingSystem: session.operatingSystem,
+        lastActivity: session.lastActivity,
+      },
+      eventAt: session.loginAt,
+      createdById: session.staffId,
+      createdAt: session.loginAt,
+      updatedAt: session.lastActivity,
+    }));
+    return [...records, ...loginEvents].sort(
+      (a, b) => (b.eventAt?.getTime() ?? b.createdAt.getTime()) - (a.eventAt?.getTime() ?? a.createdAt.getTime()),
+    );
   }
 
   create(facilityId: string, staffId: string, module: string, dto: CreateOperationalRecordDto) {

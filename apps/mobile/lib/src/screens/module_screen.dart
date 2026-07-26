@@ -26,12 +26,18 @@ class ModuleScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final operations = operationsModule;
+    final role = ref.watch(sessionProvider).account?.role;
+    final isAdmin = role == 'Admin' || role == 'Super Admin';
+    final canWrite =
+        operations != null &&
+        operations != 'audit-logs' &&
+        (isAdmin || operations == 'messages');
     final asyncItems = operations != null
         ? ref.watch(operationalRecordsProvider(operations))
         : ref.watch(apiRecordsProvider(apiPath!));
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: operations == null
+      floatingActionButton: !canWrite
           ? null
           : FloatingActionButton.extended(
               onPressed: () => _create(context, ref, operations),
@@ -79,13 +85,15 @@ class ModuleScreen extends ConsumerWidget {
                     if (item is OperationalRecord) {
                       return _OperationalTile(
                         record: item,
-                        onStatus: (status) => _changeStatus(
-                          context,
-                          ref,
-                          operations!,
-                          item,
-                          status,
-                        ),
+                        onStatus: canWrite
+                            ? (status) => _changeStatus(
+                                context,
+                                ref,
+                                operations,
+                                item,
+                                status,
+                              )
+                            : null,
                       );
                     }
                     return _ApiTile(item: item as Map<String, dynamic>);
@@ -252,7 +260,7 @@ class _Header extends StatelessWidget {
 class _OperationalTile extends StatelessWidget {
   const _OperationalTile({required this.record, required this.onStatus});
   final OperationalRecord record;
-  final ValueChanged<String> onStatus;
+  final ValueChanged<String>? onStatus;
   @override
   Widget build(BuildContext context) => Card(
     margin: const EdgeInsets.only(bottom: 10),
@@ -268,17 +276,19 @@ class _OperationalTile extends StatelessWidget {
             DateFormat('EEE, d MMM · h:mm a').format(record.eventAt!.toLocal()),
         ].join('\n'),
       ),
-      trailing: PopupMenuButton<String>(
-        tooltip: 'Change status',
-        onSelected: onStatus,
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'ACTIVE', child: Text('Active')),
-          PopupMenuItem(value: 'PENDING', child: Text('Pending')),
-          PopupMenuItem(value: 'COMPLETED', child: Text('Completed')),
-          PopupMenuItem(value: 'INACTIVE', child: Text('Inactive')),
-        ],
-        child: StatusPill(_pretty(record.status)),
-      ),
+      trailing: onStatus == null
+          ? StatusPill(_pretty(record.status))
+          : PopupMenuButton<String>(
+              tooltip: 'Change status',
+              onSelected: onStatus,
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'ACTIVE', child: Text('Active')),
+                PopupMenuItem(value: 'PENDING', child: Text('Pending')),
+                PopupMenuItem(value: 'COMPLETED', child: Text('Completed')),
+                PopupMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+              ],
+              child: StatusPill(_pretty(record.status)),
+            ),
     ),
   );
 }
@@ -410,12 +420,7 @@ abstract final class MobileModules {
     icon: Icons.campaign_outlined,
     operationsModule: 'announcements',
   );
-  static const auditLogs = ModuleScreen(
-    title: 'Audit logs',
-    subtitle: 'System activity, actors, actions, and status.',
-    icon: Icons.policy_outlined,
-    operationsModule: 'audit-logs',
-  );
+  static const auditLogs = AuditLogsMobileScreen();
   static const billing = ModuleScreen(
     title: 'Billing',
     subtitle: 'Invoices, balances, receipts, and payments.',
@@ -434,4 +439,316 @@ abstract final class MobileModules {
     icon: Icons.chat_bubble_outline,
     operationsModule: 'messages',
   );
+}
+
+class AuditLogsMobileScreen extends ConsumerStatefulWidget {
+  const AuditLogsMobileScreen({super.key});
+
+  @override
+  ConsumerState<AuditLogsMobileScreen> createState() =>
+      _AuditLogsMobileScreenState();
+}
+
+class _AuditLogsMobileScreenState extends ConsumerState<AuditLogsMobileScreen> {
+  final _command = TextEditingController();
+  bool _devMode = false;
+  bool _cleared = false;
+  String _filter = '';
+  int? _limit;
+  String _notice = 'Type help to view available commands.';
+
+  @override
+  void dispose() {
+    _command.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final superAdmin =
+        ref.watch(sessionProvider).account?.role == 'Super Admin';
+    final result = ref.watch(operationalRecordsProvider('audit-logs'));
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('Audit logs'),
+        actions: [
+          if (superAdmin)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                selected: _devMode,
+                avatar: const Icon(Icons.terminal, size: 18),
+                label: Text(_devMode ? 'Exit dev mode' : 'Dev mode'),
+                onSelected: (value) => setState(() => _devMode = value),
+              ),
+            ),
+        ],
+      ),
+      body: result.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => ErrorState(
+          message: error.toString(),
+          retry: () => ref.invalidate(operationalRecordsProvider('audit-logs')),
+        ),
+        data: (records) =>
+            _devMode && superAdmin ? _terminal(records) : _register(records),
+      ),
+    );
+  }
+
+  Widget _register(List<OperationalRecord> records) {
+    if (records.isEmpty) {
+      return const EmptyState(
+        icon: Icons.policy_outlined,
+        title: 'No audit activity',
+        message: 'Login and system activity will appear here.',
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(operationalRecordsProvider('audit-logs'));
+        await ref.read(operationalRecordsProvider('audit-logs').future);
+      },
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        itemCount: records.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final record = records[index];
+          return Card(
+            child: ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.security_outlined)),
+              title: Text(
+                record.title,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                [
+                  if (record.eventAt != null)
+                    DateFormat(
+                      'yyyy-MM-dd HH:mm:ss',
+                    ).format(record.eventAt!.toLocal()),
+                  if (record.subtitle?.isNotEmpty == true) record.subtitle!,
+                ].join('\n'),
+              ),
+              trailing: StatusPill(_pretty(record.status)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _terminal(List<OperationalRecord> records) {
+    final ordered = [...records]
+      ..sort(
+        (a, b) => (b.eventAt ?? DateTime(1970)).compareTo(
+          a.eventAt ?? DateTime(1970),
+        ),
+      );
+    final matching = ordered.where((record) {
+      final text =
+          '${record.id} ${record.title} ${record.subtitle ?? ''} ${record.status} ${record.data}'
+              .toLowerCase();
+      return _filter.isEmpty || text.contains(_filter.toLowerCase());
+    }).toList();
+    final visible = _limit == null ? matching : matching.take(_limit!).toList();
+    return Container(
+      color: const Color(0xFF090C0A),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              color: const Color(0xFF151A16),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.terminal,
+                    color: Color(0xFF6EE7A8),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'carenest:audit — read only',
+                      style: TextStyle(
+                        color: Color(0xFFCBD5E1),
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${visible.length}/${records.length}',
+                    style: const TextStyle(
+                      color: Color(0xFF6EE7A8),
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(14),
+                children: [
+                  const Text(
+                    r'$ carenest audit --interactive --read-only',
+                    style: TextStyle(
+                      color: Color(0xFF6EE7A8),
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _notice,
+                    style: const TextStyle(
+                      color: Color(0xFF67E8F9),
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (!_cleared)
+                    ...visible.map(
+                      (record) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text:
+                                    '[${record.eventAt?.toLocal().toIso8601String() ?? 'unknown'}] ',
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                              TextSpan(
+                                text: '${record.status} ',
+                                style: const TextStyle(
+                                  color: Color(0xFF6EE7A8),
+                                ),
+                              ),
+                              TextSpan(
+                                text: '${record.title}\n',
+                                style: const TextStyle(
+                                  color: Color(0xFFC4B5FD),
+                                ),
+                              ),
+                              TextSpan(
+                                text: record.subtitle ?? 'No details',
+                                style: const TextStyle(
+                                  color: Color(0xFFCBD5E1),
+                                ),
+                              ),
+                            ],
+                          ),
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Container(
+              color: const Color(0xFF101411),
+              padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+              child: Row(
+                children: [
+                  const Text(
+                    r'audit$ ',
+                    style: TextStyle(
+                      color: Color(0xFF6EE7A8),
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _command,
+                      onSubmitted: _run,
+                      autocorrect: false,
+                      style: const TextStyle(
+                        color: Color(0xFF86EFAC),
+                        fontFamily: 'monospace',
+                      ),
+                      decoration: const InputDecoration(
+                        hintText: 'help, search <text>, tail <n>...',
+                        hintStyle: TextStyle(color: Color(0xFF475569)),
+                        border: InputBorder.none,
+                        filled: false,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _run(_command.text),
+                    icon: const Icon(
+                      Icons.keyboard_return,
+                      color: Color(0xFF6EE7A8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _run(String raw) {
+    final command = raw.trim();
+    if (command.isEmpty) return;
+    final parts = command.split(RegExp(r'\s+'));
+    final name = parts.first.toLowerCase();
+    final value = parts.skip(1).join(' ');
+    setState(() {
+      switch (name) {
+        case 'help':
+          _notice =
+              'help | list | search <text> | status <value> | tail <number> | clear | reset';
+        case 'clear':
+          _cleared = true;
+          _notice = 'Terminal cleared.';
+        case 'list':
+        case 'all':
+        case 'reset':
+          _filter = '';
+          _limit = null;
+          _cleared = false;
+          _notice = 'Showing all immutable audit events.';
+        case 'search':
+        case 'status':
+          _filter = value;
+          _limit = null;
+          _cleared = false;
+          _notice = value.isEmpty
+              ? 'Usage: $name <value>'
+              : 'Filtering audit events for "$value".';
+        case 'tail':
+          final amount = int.tryParse(value);
+          if (amount == null || amount <= 0) {
+            _notice = 'Usage: tail <positive number>';
+          } else {
+            _filter = '';
+            _limit = amount;
+            _cleared = false;
+            _notice = 'Showing the $amount newest audit events.';
+          }
+        default:
+          _filter = command;
+          _limit = null;
+          _cleared = false;
+          _notice = 'Quick search for "$command".';
+      }
+      _command.clear();
+    });
+  }
 }

@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { roleHome } from '@/lib/access';
 import { Button } from './ui';
 import careNestLogo from '@/assets/CareNest.png';
 
@@ -79,7 +80,7 @@ export function LoginForm() {
       otherStorage.removeItem('carenest_staff');
       otherStorage.removeItem('carenest_permissions');
       otherStorage.removeItem('carenest_must_change_password');
-      const destination=result.staff.role==='Guest'&&result.staff.linkedResidentId?`/residents/${result.staff.linkedResidentId}`:'/dashboard';
+      const destination=roleHome(result.staff.role,result.staff.linkedResidentId);
       router.replace(destination);
       router.refresh();
     } catch (error) {

@@ -1,71 +1,705 @@
-'use client';
+"use client";
 
-import * as Dialog from '@radix-ui/react-dialog';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Boxes, CalendarClock, Edit3, Eye, PackageCheck, Pill, Plus, Search, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { api, type MedicationRecord } from '@/lib/api';
-import { Badge, Button, Skeleton } from './ui';
+import * as Dialog from "@radix-ui/react-dialog";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  Boxes,
+  CalendarClock,
+  Edit3,
+  Eye,
+  PackageCheck,
+  Pill,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { api, authHeaders, type MedicationRecord } from "@/lib/api";
+import { canManageMedication, currentAccount } from "@/lib/access";
+import { Badge, Button, Skeleton } from "./ui";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
 export function MedicationPage() {
-  const query = useQuery({ queryKey: ['medications'], queryFn: api.medications });
-  const [search, setSearch] = useState('');
-  const [stockFilter, setStockFilter] = useState('ALL');
+  const canManage = canManageMedication(currentAccount()?.role);
+  const query = useQuery({
+    queryKey: ["medications"],
+    queryFn: api.medications,
+  });
+  const [search, setSearch] = useState("");
+  const [stockFilter, setStockFilter] = useState("ALL");
   const [selected, setSelected] = useState<MedicationRecord>();
   const [editing, setEditing] = useState<MedicationRecord>();
   const [stocking, setStocking] = useState<MedicationRecord>();
   const medicines = query.data ?? [];
-  const filtered = useMemo(() => medicines.filter((item) => {
-    const term = search.toLowerCase();
-    const matches = `${item.name} ${item.genericName ?? ''} ${item.resident.firstName} ${item.resident.lastName} ${item.resident.room}`.toLowerCase().includes(term);
-    const low = item.stockQuantity <= item.reorderLevel;
-    return matches && (stockFilter === 'ALL' || stockFilter === 'LOW' && low || stockFilter === 'ACTIVE' && item.active || stockFilter === 'INACTIVE' && !item.active);
-  }), [medicines, search, stockFilter]);
-  const lowStock = medicines.filter((item) => item.stockQuantity <= item.reorderLevel).length;
-  const expiring = medicines.filter((item) => item.expiryDate && new Date(item.expiryDate).getTime() < Date.now() + 30 * 86400000).length;
+  const filtered = useMemo(
+    () =>
+      medicines.filter((item) => {
+        const term = search.toLowerCase();
+        const matches =
+          `${item.name} ${item.genericName ?? ""} ${item.resident.firstName} ${item.resident.lastName} ${item.resident.room}`
+            .toLowerCase()
+            .includes(term);
+        const low = item.stockQuantity <= item.reorderLevel;
+        return (
+          matches &&
+          (stockFilter === "ALL" ||
+            (stockFilter === "LOW" && low) ||
+            (stockFilter === "ACTIVE" && item.active) ||
+            (stockFilter === "INACTIVE" && !item.active))
+        );
+      }),
+    [medicines, search, stockFilter],
+  );
+  const lowStock = medicines.filter(
+    (item) => item.stockQuantity <= item.reorderLevel,
+  ).length;
+  const expiring = medicines.filter(
+    (item) =>
+      item.expiryDate &&
+      new Date(item.expiryDate).getTime() < Date.now() + 30 * 86400000,
+  ).length;
 
-  return <main className="min-h-screen lg:ml-64">
-    <header className="border-b bg-white px-5 py-5 md:px-9"><div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-4"><div><p className="eyebrow">Clinical operations</p><h1 className="mt-1 text-2xl font-bold">Medication</h1><p className="mt-1 text-sm text-sage">Manage resident prescriptions, instructions and medicine stock.</p></div><MedicationForm trigger={<Button><Plus size={17}/>Add medicine</Button>}/></div></header>
-    <div className="mx-auto max-w-[1500px] p-5 md:p-9">
-      <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Summary icon={Pill} label="Active medicines" value={medicines.filter((item) => item.active).length} detail="Current prescriptions" tone="bg-mint text-forest"/><Summary icon={Boxes} label="Stock units" value={medicines.reduce((total, item) => total + item.stockQuantity, 0)} detail="Across all medicines" tone="bg-[#e9f2ff] text-[#356da8]"/><Summary icon={AlertTriangle} label="Low stock" value={lowStock} detail="At or below reorder level" tone="bg-[#fff0ec] text-coral"/><Summary icon={CalendarClock} label="Expiring soon" value={expiring} detail="Within 30 days" tone="bg-[#fff3dc] text-[#946c1f]"/></section>
-      <section className="card overflow-hidden">
-        <div className="flex flex-col gap-3 border-b p-5 md:flex-row md:items-center md:justify-between"><div><p className="eyebrow">Medicine register</p><h2 className="mt-1 text-lg font-bold">Resident medication</h2></div><div className="flex flex-col gap-3 sm:flex-row"><label className="relative"><Search className="absolute left-3 top-3 text-sage" size={17}/><input suppressHydrationWarning value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search medicine or resident..." className="focus-ring h-11 w-full rounded-xl border pl-10 pr-3 text-sm sm:w-72"/></label><select suppressHydrationWarning value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} className="focus-ring h-11 rounded-xl border bg-white px-3 text-sm font-semibold"><option value="ALL">All medicine</option><option value="LOW">Low stock</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div></div>
-        {query.isLoading ? <div className="p-5"><Skeleton className="h-80"/></div> : filtered.length ? <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr className="bg-cream/60 text-[11px] uppercase tracking-wider text-sage"><th className="px-5 py-3">Medicine</th><th className="px-4 py-3">Resident</th><th className="px-4 py-3">Schedule</th><th className="px-4 py-3">Stock</th><th className="px-4 py-3">Expiry</th><th className="px-4 py-3">Status</th><th className="px-4 py-3"></th></tr></thead><tbody>{filtered.map((item) => <MedicineRow key={item.id} medicine={item} details={() => setSelected(item)} edit={() => setEditing(item)} stock={() => setStocking(item)}/>)}</tbody></table></div> : <div className="grid min-h-72 place-items-center text-center"><div><Pill className="mx-auto text-sage"/><h3 className="mt-3 font-bold">No medicine found</h3><p className="text-sm text-sage">Add medicine or change the current filters.</p></div></div>}
-      </section>
-    </div>
-    {selected && <MedicationDetails medication={selected} close={() => setSelected(undefined)}/>}
-    {editing && <MedicationForm medication={editing} trigger={null} open close={() => setEditing(undefined)}/>}
-    {stocking && <StockDialog medication={stocking} close={() => setStocking(undefined)}/>}
-  </main>;
+  return (
+    <main className="min-h-screen lg:ml-64">
+      <header className="border-b bg-white px-5 py-5 md:px-9">
+        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="eyebrow">Clinical operations</p>
+            <h1 className="mt-1 text-2xl font-bold">Medication</h1>
+            <p className="mt-1 text-sm text-sage">
+              Manage resident prescriptions, instructions and medicine stock.
+            </p>
+          </div>
+          {canManage && (
+            <MedicationForm
+              trigger={
+                <Button>
+                  <Plus size={17} />
+                  Add medicine
+                </Button>
+              }
+            />
+          )}
+        </div>
+      </header>
+      <div className="mx-auto max-w-[1500px] p-5 md:p-9">
+        <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Summary
+            icon={Pill}
+            label="Active medicines"
+            value={medicines.filter((item) => item.active).length}
+            detail="Current prescriptions"
+            tone="bg-mint text-forest"
+          />
+          <Summary
+            icon={Boxes}
+            label="Stock units"
+            value={medicines.reduce(
+              (total, item) => total + item.stockQuantity,
+              0,
+            )}
+            detail="Across all medicines"
+            tone="bg-[#e9f2ff] text-[#356da8]"
+          />
+          <Summary
+            icon={AlertTriangle}
+            label="Low stock"
+            value={lowStock}
+            detail="At or below reorder level"
+            tone="bg-[#fff0ec] text-coral"
+          />
+          <Summary
+            icon={CalendarClock}
+            label="Expiring soon"
+            value={expiring}
+            detail="Within 30 days"
+            tone="bg-[#fff3dc] text-[#946c1f]"
+          />
+        </section>
+        <section className="card overflow-hidden">
+          <div className="flex flex-col gap-3 border-b p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="eyebrow">Medicine register</p>
+              <h2 className="mt-1 text-lg font-bold">Resident medication</h2>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <label className="relative">
+                <Search className="absolute left-3 top-3 text-sage" size={17} />
+                <input
+                  suppressHydrationWarning
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search medicine or resident..."
+                  className="focus-ring h-11 w-full rounded-xl border pl-10 pr-3 text-sm sm:w-72"
+                />
+              </label>
+              <select
+                suppressHydrationWarning
+                value={stockFilter}
+                onChange={(event) => setStockFilter(event.target.value)}
+                className="focus-ring h-11 rounded-xl border bg-white px-3 text-sm font-semibold"
+              >
+                <option value="ALL">All medicine</option>
+                <option value="LOW">Low stock</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+          </div>
+          {query.isLoading ? (
+            <div className="p-5">
+              <Skeleton className="h-80" />
+            </div>
+          ) : filtered.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-cream/60 text-[11px] uppercase tracking-wider text-sage">
+                    <th className="px-5 py-3">Medicine</th>
+                    <th className="px-4 py-3">Resident</th>
+                    <th className="px-4 py-3">Schedule</th>
+                    <th className="px-4 py-3">Stock</th>
+                    <th className="px-4 py-3">Expiry</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item) => (
+                    <MedicineRow
+                      key={item.id}
+                      medicine={item}
+                      canManage={canManage}
+                      details={() => setSelected(item)}
+                      edit={() => setEditing(item)}
+                      stock={() => setStocking(item)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid min-h-72 place-items-center text-center">
+              <div>
+                <Pill className="mx-auto text-sage" />
+                <h3 className="mt-3 font-bold">No medicine found</h3>
+                <p className="text-sm text-sage">
+                  Add medicine or change the current filters.
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+      {selected && (
+        <MedicationDetails
+          medication={selected}
+          close={() => setSelected(undefined)}
+        />
+      )}
+      {editing && (
+        <MedicationForm
+          medication={editing}
+          trigger={null}
+          open
+          close={() => setEditing(undefined)}
+        />
+      )}
+      {stocking && (
+        <StockDialog
+          medication={stocking}
+          close={() => setStocking(undefined)}
+        />
+      )}
+    </main>
+  );
 }
 
-function MedicineRow({ medicine, details, edit, stock }: { medicine: MedicationRecord; details: () => void; edit: () => void; stock: () => void }) {
+function MedicineRow({
+  medicine,
+  canManage,
+  details,
+  edit,
+  stock,
+}: {
+  medicine: MedicationRecord;
+  canManage: boolean;
+  details: () => void;
+  edit: () => void;
+  stock: () => void;
+}) {
   const low = medicine.stockQuantity <= medicine.reorderLevel;
-  return <tr className="border-t hover:bg-mint/20"><td className="px-5 py-4"><p className="font-semibold">{medicine.name} {medicine.strength}</p><p className="text-xs text-sage">{medicine.genericName || 'No generic name'} · {medicine.route}</p></td><td className="px-4"><p className="text-sm font-semibold">{medicine.resident.preferredName || medicine.resident.firstName} {medicine.resident.lastName}</p><p className="text-xs text-sage">Room {medicine.resident.room}</p></td><td className="px-4 text-sm"><p>{medicine.dosage}</p><p className="text-xs text-sage">{medicine.frequency}</p></td><td className="px-4"><button onClick={stock} className={`rounded-lg px-2.5 py-1.5 text-sm font-bold ${low ? 'bg-[#fff0ec] text-coral' : 'bg-mint text-forest'}`}>{medicine.stockQuantity} {medicine.stockUnit}</button><p className="mt-1 text-[10px] text-sage">Reorder at {medicine.reorderLevel}</p></td><td className="px-4 text-sm">{medicine.expiryDate ? date(medicine.expiryDate) : '—'}</td><td className="px-4"><Badge className={medicine.active ? '' : 'bg-slate-100 text-slate-500'}>{medicine.active ? 'Active' : 'Inactive'}</Badge></td><td className="px-4"><div className="flex gap-1"><Action label="View details" onClick={details}><Eye size={17}/></Action><Action label="Update medicine" onClick={edit}><Edit3 size={17}/></Action><Action label="Update stock" onClick={stock}><Boxes size={17}/></Action></div></td></tr>;
+  return (
+    <tr className="border-t hover:bg-mint/20">
+      <td className="px-5 py-4">
+        <p className="font-semibold">
+          {medicine.name} {medicine.strength}
+        </p>
+        <p className="text-xs text-sage">
+          {medicine.genericName || "No generic name"} · {medicine.route}
+        </p>
+      </td>
+      <td className="px-4">
+        <p className="text-sm font-semibold">
+          {medicine.resident.preferredName || medicine.resident.firstName}{" "}
+          {medicine.resident.lastName}
+        </p>
+        <p className="text-xs text-sage">Room {medicine.resident.room}</p>
+      </td>
+      <td className="px-4 text-sm">
+        <p>{medicine.dosage}</p>
+        <p className="text-xs text-sage">{medicine.frequency}</p>
+      </td>
+      <td className="px-4">
+        <button
+          disabled={!canManage}
+          onClick={stock}
+          className={`rounded-lg px-2.5 py-1.5 text-sm font-bold ${low ? "bg-[#fff0ec] text-coral" : "bg-mint text-forest"}`}
+        >
+          {medicine.stockQuantity} {medicine.stockUnit}
+        </button>
+        <p className="mt-1 text-[10px] text-sage">
+          Reorder at {medicine.reorderLevel}
+        </p>
+      </td>
+      <td className="px-4 text-sm">
+        {medicine.expiryDate ? date(medicine.expiryDate) : "—"}
+      </td>
+      <td className="px-4">
+        <Badge className={medicine.active ? "" : "bg-slate-100 text-slate-500"}>
+          {medicine.active ? "Active" : "Inactive"}
+        </Badge>
+      </td>
+      <td className="px-4">
+        <div className="flex gap-1">
+          <Action label="View details" onClick={details}>
+            <Eye size={17} />
+          </Action>
+          {canManage && (
+            <>
+              <Action label="Update medicine" onClick={edit}>
+                <Edit3 size={17} />
+              </Action>
+              <Action label="Update stock" onClick={stock}>
+                <Boxes size={17} />
+              </Action>
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
 }
 
-const formSchema = z.object({ residentId: z.string().min(1), name: z.string().min(2), genericName: z.string().optional(), strength: z.string().optional(), dosage: z.string().min(1), route: z.string().min(1), frequency: z.string().min(1), instructions: z.string().optional(), prescribingDoctor: z.string().optional(), reason: z.string().optional(), stockQuantity: z.coerce.number().min(0), stockUnit: z.string().min(1), reorderLevel: z.coerce.number().min(0), supplier: z.string().optional(), batchNumber: z.string().optional(), expiryDate: z.string().optional(), startsAt: z.string().min(1), endsAt: z.string().optional(), active: z.boolean() });
+const formSchema = z.object({
+  residentId: z.string().min(1),
+  name: z.string().min(2),
+  genericName: z.string().optional(),
+  strength: z.string().optional(),
+  dosage: z.string().min(1),
+  route: z.string().min(1),
+  frequency: z.string().min(1),
+  instructions: z.string().optional(),
+  prescribingDoctor: z.string().optional(),
+  reason: z.string().optional(),
+  stockQuantity: z.coerce.number().min(0),
+  stockUnit: z.string().min(1),
+  reorderLevel: z.coerce.number().min(0),
+  supplier: z.string().optional(),
+  batchNumber: z.string().optional(),
+  expiryDate: z.string().optional(),
+  startsAt: z.string().min(1),
+  endsAt: z.string().optional(),
+  active: z.boolean(),
+});
 type MedicineForm = z.infer<typeof formSchema>;
 
-function MedicationForm({ trigger, medication, open, close }: { trigger: React.ReactNode; medication?: MedicationRecord; open?: boolean; close?: () => void }) {
-  const [internalOpen, setInternalOpen] = useState(false); const isOpen = open ?? internalOpen; const setOpen = close ? (value: boolean) => { if (!value) close(); } : setInternalOpen;
-  const residents = useQuery({ queryKey: ['residents'], queryFn: api.residents }); const client = useQueryClient();
-  const { register, handleSubmit, formState: { errors } } = useForm<MedicineForm>({ resolver: zodResolver(formSchema), defaultValues: medication ? { ...medication, expiryDate: inputDate(medication.expiryDate), startsAt: inputDate(medication.startsAt), endsAt: inputDate(medication.endsAt) } : { active: true, stockQuantity: 0, reorderLevel: 10, stockUnit: 'tablets', startsAt: inputDate(new Date().toISOString()), route: 'Oral' } });
-  const mutation = useMutation({ mutationFn: async (data: MedicineForm) => { const response = await fetch(`${API}/medications${medication ? `/${medication.id}` : ''}`, { method: medication ? 'PATCH' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) }); if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(Array.isArray(body.message) ? body.message.join(', ') : body.message || 'Medicine could not be saved'); } return response.json(); }, onSuccess: async () => { await client.invalidateQueries({ queryKey: ['medications'] }); setOpen(false); } });
-  return <Dialog.Root open={isOpen} onOpenChange={setOpen}>{trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}<Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-ink/50 backdrop-blur-sm"/><Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-2xl bg-white p-6 shadow-2xl"><Dialog.Title className="text-xl font-bold">{medication ? 'Update medicine' : 'Add medicine'}</Dialog.Title><Dialog.Description className="mt-1 text-sm text-sage">Record prescription details and current stock information.</Dialog.Description><Dialog.Close className="absolute right-5 top-5"><X/></Dialog.Close><form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="mt-6 grid gap-4 md:grid-cols-3">
-    <Field label="Resident" error={errors.residentId?.message}><select {...register('residentId')} disabled={!!medication}><option value="">Select resident…</option>{residents.data?.map((resident) => <option key={resident.id} value={resident.id}>{resident.preferredName || resident.firstName} {resident.lastName} · {resident.room}</option>)}</select></Field><Field label="Medicine name" error={errors.name?.message}><input {...register('name')}/></Field><Field label="Generic name"><input {...register('genericName')}/></Field><Field label="Strength"><input {...register('strength')} placeholder="e.g. 500 mg"/></Field><Field label="Dosage"><input {...register('dosage')} placeholder="e.g. 1 tablet"/></Field><Field label="Route"><select {...register('route')}><option>Oral</option><option>Topical</option><option>Inhaled</option><option>Injection</option><option>Other</option></select></Field><Field label="Frequency"><input {...register('frequency')} placeholder="e.g. Twice daily"/></Field><Field label="Start date"><input type="date" {...register('startsAt')}/></Field><Field label="End date"><input type="date" {...register('endsAt')}/></Field><Field label="Prescribing doctor"><input {...register('prescribingDoctor')}/></Field><Field label="Reason"><input {...register('reason')}/></Field><Field label="Supplier"><input {...register('supplier')}/></Field><Field label="Stock quantity"><input type="number" {...register('stockQuantity')}/></Field><Field label="Stock unit"><input {...register('stockUnit')}/></Field><Field label="Reorder level"><input type="number" {...register('reorderLevel')}/></Field><Field label="Batch number"><input {...register('batchNumber')}/></Field><Field label="Expiry date"><input type="date" {...register('expiryDate')}/></Field><label className="flex items-center gap-2 self-end py-3 text-sm font-semibold"><input type="checkbox" {...register('active')}/> Active medicine</label><Field label="Special instructions" wide><textarea rows={3} {...register('instructions')}/></Field>{mutation.error && <p className="rounded-xl bg-[#fff0ec] p-3 text-sm text-coral md:col-span-3">{mutation.error.message}</p>}<div className="flex justify-end gap-3 md:col-span-3"><Dialog.Close asChild><button type="button" className="h-10 rounded-xl border px-4 text-sm font-semibold">Cancel</button></Dialog.Close><Button disabled={mutation.isPending}>{mutation.isPending ? 'Saving…' : medication ? 'Update medicine' : 'Add medicine'}</Button></div>
-  </form></Dialog.Content></Dialog.Portal></Dialog.Root>;
+function MedicationForm({
+  trigger,
+  medication,
+  open,
+  close,
+}: {
+  trigger: React.ReactNode;
+  medication?: MedicationRecord;
+  open?: boolean;
+  close?: () => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open ?? internalOpen;
+  const setOpen = close
+    ? (value: boolean) => {
+        if (!value) close();
+      }
+    : setInternalOpen;
+  const residents = useQuery({
+    queryKey: ["residents"],
+    queryFn: api.residents,
+  });
+  const client = useQueryClient();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<MedicineForm>({
+    resolver: zodResolver(formSchema),
+    defaultValues: medication
+      ? {
+          ...medication,
+          expiryDate: inputDate(medication.expiryDate),
+          startsAt: inputDate(medication.startsAt),
+          endsAt: inputDate(medication.endsAt),
+        }
+      : {
+          active: true,
+          stockQuantity: 0,
+          reorderLevel: 10,
+          stockUnit: "tablets",
+          startsAt: inputDate(new Date().toISOString()),
+          route: "Oral",
+        },
+  });
+  const mutation = useMutation({
+    mutationFn: async (data: MedicineForm) => {
+      const response = await fetch(
+        `${API}/medications${medication ? `/${medication.id}` : ""}`,
+        {
+          method: medication ? "PATCH" : "POST",
+          headers: authHeaders(true),
+          body: JSON.stringify(data),
+        },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          Array.isArray(body.message)
+            ? body.message.join(", ")
+            : body.message || "Medicine could not be saved",
+        );
+      }
+      return response.json();
+    },
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["medications"] });
+      setOpen(false);
+    },
+  });
+  return (
+    <Dialog.Root open={isOpen} onOpenChange={setOpen}>
+      {trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/50 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+          <Dialog.Title className="text-xl font-bold">
+            {medication ? "Update medicine" : "Add medicine"}
+          </Dialog.Title>
+          <Dialog.Description className="mt-1 text-sm text-sage">
+            Record prescription details and current stock information.
+          </Dialog.Description>
+          <Dialog.Close className="absolute right-5 top-5">
+            <X />
+          </Dialog.Close>
+          <form
+            onSubmit={handleSubmit((data) => mutation.mutate(data))}
+            className="mt-6 grid gap-4 md:grid-cols-3"
+          >
+            <Field label="Resident" error={errors.residentId?.message}>
+              <select {...register("residentId")} disabled={!!medication}>
+                <option value="">Select resident…</option>
+                {residents.data?.map((resident) => (
+                  <option key={resident.id} value={resident.id}>
+                    {resident.preferredName || resident.firstName}{" "}
+                    {resident.lastName} · {resident.room}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Medicine name" error={errors.name?.message}>
+              <input {...register("name")} />
+            </Field>
+            <Field label="Generic name">
+              <input {...register("genericName")} />
+            </Field>
+            <Field label="Strength">
+              <input {...register("strength")} placeholder="e.g. 500 mg" />
+            </Field>
+            <Field label="Dosage">
+              <input {...register("dosage")} placeholder="e.g. 1 tablet" />
+            </Field>
+            <Field label="Route">
+              <select {...register("route")}>
+                <option>Oral</option>
+                <option>Topical</option>
+                <option>Inhaled</option>
+                <option>Injection</option>
+                <option>Other</option>
+              </select>
+            </Field>
+            <Field label="Frequency">
+              <input
+                {...register("frequency")}
+                placeholder="e.g. Twice daily"
+              />
+            </Field>
+            <Field label="Start date">
+              <input type="date" {...register("startsAt")} />
+            </Field>
+            <Field label="End date">
+              <input type="date" {...register("endsAt")} />
+            </Field>
+            <Field label="Prescribing doctor">
+              <input {...register("prescribingDoctor")} />
+            </Field>
+            <Field label="Reason">
+              <input {...register("reason")} />
+            </Field>
+            <Field label="Supplier">
+              <input {...register("supplier")} />
+            </Field>
+            <Field label="Stock quantity">
+              <input type="number" {...register("stockQuantity")} />
+            </Field>
+            <Field label="Stock unit">
+              <input {...register("stockUnit")} />
+            </Field>
+            <Field label="Reorder level">
+              <input type="number" {...register("reorderLevel")} />
+            </Field>
+            <Field label="Batch number">
+              <input {...register("batchNumber")} />
+            </Field>
+            <Field label="Expiry date">
+              <input type="date" {...register("expiryDate")} />
+            </Field>
+            <label className="flex items-center gap-2 self-end py-3 text-sm font-semibold">
+              <input type="checkbox" {...register("active")} /> Active medicine
+            </label>
+            <Field label="Special instructions" wide>
+              <textarea rows={3} {...register("instructions")} />
+            </Field>
+            {mutation.error && (
+              <p className="rounded-xl bg-[#fff0ec] p-3 text-sm text-coral md:col-span-3">
+                {mutation.error.message}
+              </p>
+            )}
+            <div className="flex justify-end gap-3 md:col-span-3">
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="h-10 rounded-xl border px-4 text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+              </Dialog.Close>
+              <Button disabled={mutation.isPending}>
+                {mutation.isPending
+                  ? "Saving…"
+                  : medication
+                    ? "Update medicine"
+                    : "Add medicine"}
+              </Button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
 }
 
-function StockDialog({ medication, close }: { medication: MedicationRecord; close: () => void }) { const [quantity, setQuantity] = useState(medication.stockQuantity); const client = useQueryClient(); const mutation = useMutation({ mutationFn: async () => { const response = await fetch(`${API}/medications/${medication.id}/stock`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ stockQuantity: quantity }) }); if (!response.ok) throw new Error('Stock could not be updated'); }, onSuccess: async () => { await client.invalidateQueries({ queryKey: ['medications'] }); close(); } }); return <Dialog.Root open onOpenChange={(value) => !value && close()}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-ink/50"/><Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6"><Dialog.Title className="text-xl font-bold">Update medicine stock</Dialog.Title><Dialog.Description className="mt-1 text-sm text-sage">{medication.name} · {medication.resident.firstName} {medication.resident.lastName}</Dialog.Description><label className="mt-6 block text-sm font-semibold">Quantity ({medication.stockUnit})<input type="number" min="0" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} className="focus-ring mt-2 h-12 w-full rounded-xl border px-3 text-lg font-bold"/></label><p className="mt-2 text-xs text-sage">Low-stock alert activates at {medication.reorderLevel} {medication.stockUnit}.</p><div className="mt-6 flex justify-end gap-3"><button onClick={close} className="h-10 rounded-xl border px-4">Cancel</button><Button onClick={() => mutation.mutate()}><PackageCheck size={17}/>Save stock</Button></div></Dialog.Content></Dialog.Portal></Dialog.Root>; }
-function MedicationDetails({ medication, close }: { medication: MedicationRecord; close: () => void }) { const items = [['Resident', `${medication.resident.firstName} ${medication.resident.lastName} · ${medication.resident.room}`], ['Generic name', medication.genericName], ['Strength', medication.strength], ['Dosage', medication.dosage], ['Route', medication.route], ['Frequency', medication.frequency], ['Reason', medication.reason], ['Prescribing doctor', medication.prescribingDoctor], ['Stock', `${medication.stockQuantity} ${medication.stockUnit}`], ['Reorder level', `${medication.reorderLevel} ${medication.stockUnit}`], ['Supplier', medication.supplier], ['Batch number', medication.batchNumber], ['Expiry date', medication.expiryDate ? date(medication.expiryDate) : undefined], ['Started', date(medication.startsAt)], ['Ends', medication.endsAt ? date(medication.endsAt) : 'Ongoing']]; return <Dialog.Root open onOpenChange={(value) => !value && close()}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-40 bg-ink/50"/><Dialog.Content className="fixed right-0 top-0 z-50 h-full w-full max-w-xl overflow-auto bg-white p-7 shadow-2xl"><Dialog.Title className="text-2xl font-bold">{medication.name} {medication.strength}</Dialog.Title><Dialog.Description className="mt-1 text-sm text-sage">Complete medication and stock details</Dialog.Description><button onClick={close} className="absolute right-6 top-6"><X/></button><dl className="mt-7 grid gap-5 sm:grid-cols-2">{items.map(([label, value]) => <div key={label}><dt className="eyebrow">{label}</dt><dd className="mt-1 text-sm font-semibold">{value || '—'}</dd></div>)}</dl><div className="mt-7 rounded-xl bg-mint p-4"><p className="eyebrow">Special instructions</p><p className="mt-2 text-sm">{medication.instructions || 'No special instructions recorded.'}</p></div></Dialog.Content></Dialog.Portal></Dialog.Root>; }
-function Field({ label, error, wide, children }: { label: string; error?: string; wide?: boolean; children: React.ReactElement }) { return <label className={`text-sm font-semibold ${wide ? 'md:col-span-3' : ''}`}>{label}<div className="[&_input]:focus-ring [&_select]:focus-ring [&_textarea]:focus-ring [&_input]:mt-1.5 [&_select]:mt-1.5 [&_textarea]:mt-1.5 [&_input]:h-11 [&_select]:h-11 [&_input]:w-full [&_select]:w-full [&_textarea]:w-full [&_input]:rounded-xl [&_select]:rounded-xl [&_textarea]:rounded-xl [&_input]:border [&_select]:border [&_textarea]:border [&_input]:px-3 [&_select]:px-3 [&_textarea]:p-3 [&_input]:font-normal [&_select]:font-normal [&_textarea]:font-normal">{children}</div>{error && <span className="text-xs text-coral">{error}</span>}</label>; }
-function Summary({ icon: Icon, label, value, detail, tone }: any) { return <div className="card flex items-center gap-4 p-5"><div className={`grid h-12 w-12 place-items-center rounded-xl ${tone}`}><Icon size={22}/></div><div><p className="text-sm text-sage">{label}</p><p className="text-2xl font-bold">{value}</p><p className="text-xs text-sage">{detail}</p></div></div>; }
-function Action({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) { return <button aria-label={label} title={label} onClick={onClick} className="focus-ring grid h-9 w-9 place-items-center rounded-lg text-sage hover:bg-mint hover:text-forest">{children}</button>; }
-function date(value: string) { return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(value)); }
-function inputDate(value?: string) { return value ? new Date(value).toISOString().slice(0, 10) : ''; }
+function StockDialog({
+  medication,
+  close,
+}: {
+  medication: MedicationRecord;
+  close: () => void;
+}) {
+  const [quantity, setQuantity] = useState(medication.stockQuantity);
+  const client = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(
+        `${API}/medications/${medication.id}/stock`,
+        {
+          method: "PATCH",
+          headers: authHeaders(true),
+          body: JSON.stringify({ stockQuantity: quantity }),
+        },
+      );
+      if (!response.ok) throw new Error("Stock could not be updated");
+    },
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["medications"] });
+      close();
+    },
+  });
+  return (
+    <Dialog.Root open onOpenChange={(value) => !value && close()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/50" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6">
+          <Dialog.Title className="text-xl font-bold">
+            Update medicine stock
+          </Dialog.Title>
+          <Dialog.Description className="mt-1 text-sm text-sage">
+            {medication.name} · {medication.resident.firstName}{" "}
+            {medication.resident.lastName}
+          </Dialog.Description>
+          <label className="mt-6 block text-sm font-semibold">
+            Quantity ({medication.stockUnit})
+            <input
+              type="number"
+              min="0"
+              value={quantity}
+              onChange={(event) => setQuantity(Number(event.target.value))}
+              className="focus-ring mt-2 h-12 w-full rounded-xl border px-3 text-lg font-bold"
+            />
+          </label>
+          <p className="mt-2 text-xs text-sage">
+            Low-stock alert activates at {medication.reorderLevel}{" "}
+            {medication.stockUnit}.
+          </p>
+          <div className="mt-6 flex justify-end gap-3">
+            <button onClick={close} className="h-10 rounded-xl border px-4">
+              Cancel
+            </button>
+            <Button onClick={() => mutation.mutate()}>
+              <PackageCheck size={17} />
+              Save stock
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+function MedicationDetails({
+  medication,
+  close,
+}: {
+  medication: MedicationRecord;
+  close: () => void;
+}) {
+  const items = [
+    [
+      "Resident",
+      `${medication.resident.firstName} ${medication.resident.lastName} · ${medication.resident.room}`,
+    ],
+    ["Generic name", medication.genericName],
+    ["Strength", medication.strength],
+    ["Dosage", medication.dosage],
+    ["Route", medication.route],
+    ["Frequency", medication.frequency],
+    ["Reason", medication.reason],
+    ["Prescribing doctor", medication.prescribingDoctor],
+    ["Stock", `${medication.stockQuantity} ${medication.stockUnit}`],
+    ["Reorder level", `${medication.reorderLevel} ${medication.stockUnit}`],
+    ["Supplier", medication.supplier],
+    ["Batch number", medication.batchNumber],
+    [
+      "Expiry date",
+      medication.expiryDate ? date(medication.expiryDate) : undefined,
+    ],
+    ["Started", date(medication.startsAt)],
+    ["Ends", medication.endsAt ? date(medication.endsAt) : "Ongoing"],
+  ];
+  return (
+    <Dialog.Root open onOpenChange={(value) => !value && close()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/50" />
+        <Dialog.Content className="fixed right-0 top-0 z-50 h-full w-full max-w-xl overflow-auto bg-white p-7 shadow-2xl">
+          <Dialog.Title className="text-2xl font-bold">
+            {medication.name} {medication.strength}
+          </Dialog.Title>
+          <Dialog.Description className="mt-1 text-sm text-sage">
+            Complete medication and stock details
+          </Dialog.Description>
+          <button onClick={close} className="absolute right-6 top-6">
+            <X />
+          </button>
+          <dl className="mt-7 grid gap-5 sm:grid-cols-2">
+            {items.map(([label, value]) => (
+              <div key={label}>
+                <dt className="eyebrow">{label}</dt>
+                <dd className="mt-1 text-sm font-semibold">{value || "—"}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-7 rounded-xl bg-mint p-4">
+            <p className="eyebrow">Special instructions</p>
+            <p className="mt-2 text-sm">
+              {medication.instructions || "No special instructions recorded."}
+            </p>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+function Field({
+  label,
+  error,
+  wide,
+  children,
+}: {
+  label: string;
+  error?: string;
+  wide?: boolean;
+  children: React.ReactElement;
+}) {
+  return (
+    <label className={`text-sm font-semibold ${wide ? "md:col-span-3" : ""}`}>
+      {label}
+      <div className="[&_input]:focus-ring [&_select]:focus-ring [&_textarea]:focus-ring [&_input]:mt-1.5 [&_select]:mt-1.5 [&_textarea]:mt-1.5 [&_input]:h-11 [&_select]:h-11 [&_input]:w-full [&_select]:w-full [&_textarea]:w-full [&_input]:rounded-xl [&_select]:rounded-xl [&_textarea]:rounded-xl [&_input]:border [&_select]:border [&_textarea]:border [&_input]:px-3 [&_select]:px-3 [&_textarea]:p-3 [&_input]:font-normal [&_select]:font-normal [&_textarea]:font-normal">
+        {children}
+      </div>
+      {error && <span className="text-xs text-coral">{error}</span>}
+    </label>
+  );
+}
+function Summary({ icon: Icon, label, value, detail, tone }: any) {
+  return (
+    <div className="card flex items-center gap-4 p-5">
+      <div className={`grid h-12 w-12 place-items-center rounded-xl ${tone}`}>
+        <Icon size={22} />
+      </div>
+      <div>
+        <p className="text-sm text-sage">{label}</p>
+        <p className="text-2xl font-bold">{value}</p>
+        <p className="text-xs text-sage">{detail}</p>
+      </div>
+    </div>
+  );
+}
+function Action({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="focus-ring grid h-9 w-9 place-items-center rounded-lg text-sage hover:bg-mint hover:text-forest"
+    >
+      {children}
+    </button>
+  );
+}
+function date(value: string) {
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
+    new Date(value),
+  );
+}
+function inputDate(value?: string) {
+  return value ? new Date(value).toISOString().slice(0, 10) : "";
+}

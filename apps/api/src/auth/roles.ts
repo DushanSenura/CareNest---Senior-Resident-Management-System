@@ -13,35 +13,40 @@ export type StaffRole = keyof typeof STAFF_ROLES;
 
 export const ROLE_PERMISSIONS: Record<StaffRole, string[]> = {
   SUPER_ADMIN: [
-    'organizations.manage', 'subscriptions.manage', 'system.configure', 'branches.view_all',
-    'usage.monitor', 'backups.manage', 'audit_logs.view',
+    '*',
   ],
   ADMIN: [
     'dashboard.view', 'residents.manage', 'admissions.manage', 'care_plans.manage',
     'medications.manage', 'tasks_shifts.manage', 'staff.manage', 'daily_health.manage',
     'schedule.manage', 'reports.view', 'branches.manage', 'announcements.manage',
-    'audit_logs.view',
+    'audit_logs.view', 'billing.manage', 'accounts.manage', 'messages.manage',
   ],
   GUEST: ['linked_resident.view'],
   CARE_MANAGER: [
-    'residents.assess', 'care_plans.create', 'caregivers.assign', 'care_notes.review',
-    'resident_progress.monitor',
+    'residents.view', 'care_plans.view', 'medications.view', 'daily_health.create',
+    'daily_health.view_submitted', 'schedule.view', 'announcements.view',
+    'messages.use', 'settings.manage',
   ],
   CAREGIVER: [
-    'assigned_residents.view', 'meals.record', 'hygiene.record', 'mobility.record',
-    'care_tasks.complete', 'daily_notes.submit', 'incidents.report',
+    'residents.view', 'care_plans.view', 'medications.view', 'daily_health.create',
+    'daily_health.view_submitted', 'schedule.view', 'announcements.view',
+    'messages.use', 'settings.manage',
   ],
   NURSE: [
-    'vitals.record', 'medications.administer', 'medical_history.view', 'nursing_notes.add',
-    'allergies.monitor', 'health_changes.report',
+    'residents.view', 'care_plans.view', 'medications.manage', 'daily_health.view_drafts',
+    'daily_health.view_submitted', 'schedule.view', 'announcements.view',
+    'messages.use', 'settings.manage',
   ],
   DOCTOR: [
-    'medical_records.view', 'diagnoses.add', 'treatment_plans.create', 'medications.prescribe',
-    'laboratory_tests.request', 'health_progress.review',
+    'residents.view', 'care_plans.view', 'medications.manage', 'daily_health.view_drafts',
+    'daily_health.view_submitted', 'schedule.view', 'announcements.view',
+    'messages.use', 'settings.manage',
   ],
   HR_MANAGER: [
-    'staff.add', 'attendance.manage', 'leave.manage', 'employment_documents.manage',
-    'training.monitor', 'certifications.monitor',
+    'residents.view', 'care_plans.view', 'medications.manage', 'daily_health.create',
+    'daily_health.view_drafts', 'daily_health.view_submitted', 'schedule.view',
+    'announcements.view', 'messages.use', 'settings.manage', 'staff.manage',
+    'accounts.manage',
   ],
 };
 

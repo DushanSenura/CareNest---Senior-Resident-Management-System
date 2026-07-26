@@ -86,14 +86,18 @@ class _StaffShellState extends ConsumerState<StaffShell> {
   @override
   Widget build(BuildContext context) {
     final account = ref.watch(sessionProvider).account!;
-    final item = _items[_index];
+    final items = _items
+        .where((item) => _allowed(account.role, item.label))
+        .toList();
+    if (_index >= items.length) _index = 0;
+    final item = items[_index];
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              item.label == 'Home' ? _greeting(account.firstName) : item.label,
+              _greeting(account.firstName),
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             Text(
@@ -116,11 +120,30 @@ class _StaffShellState extends ConsumerState<StaffShell> {
       ),
       body: KeyedSubtree(key: ValueKey(item.label), child: item.page),
       bottomNavigationBar: _ScrollableFeatureBar(
-        items: _items,
+        items: items,
         selectedIndex: _index,
         select: (value) => setState(() => _index = value),
       ),
     );
+  }
+
+  static bool _allowed(String role, String label) {
+    if (role == 'Super Admin' || role == 'Admin') return true;
+    const care = {
+      'Home',
+      'Residents',
+      'Care plans',
+      'Medication',
+      'Daily health',
+      'Schedule',
+      'Announcements',
+      'Messages',
+      'Settings',
+    };
+    if (role == 'HR Manager') {
+      return care.contains(label) || label == 'Staff' || label == 'Accounts';
+    }
+    return care.contains(label);
   }
 
   void _refresh() {

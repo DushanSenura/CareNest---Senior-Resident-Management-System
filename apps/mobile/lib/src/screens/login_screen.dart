@@ -19,6 +19,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _showPassword = false;
 
   static const _accounts = [
+    ('Super Admin', 'superadmin@carenest.local', 'SuperAdmin@123'),
     ('Caregiver', 'caregiver@carenest.local', 'Caregiver@123'),
     ('Nurse', 'nurse.account@carenest.local', 'Nurse@123'),
     ('Care Manager', 'caremanager@carenest.local', 'CareManager@123'),

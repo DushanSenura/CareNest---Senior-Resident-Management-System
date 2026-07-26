@@ -132,10 +132,15 @@ model DailyHealthReport {
   actionsTaken    String?
   notes           String?
   escalation      String?
+  status          String   @default("SUBMITTED")
+  createdById     String?
+  submittedAt     DateTime?
+  editableUntil   DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   @@unique([residentId, reportDate])
   @@index([reportDate])
+  @@index([createdById, status])
 }
 
 model AdmissionProfile {

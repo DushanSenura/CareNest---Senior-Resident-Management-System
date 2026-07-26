@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 export class CreateDailyHealthReportDto {
   @ApiProperty() @IsString() residentId!: string;
   @ApiProperty() @IsDateString() reportDate!: string;
@@ -26,4 +26,6 @@ export class CreateDailyHealthReportDto {
   @ApiPropertyOptional() @IsOptional() @IsString() actionsTaken?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() escalation?: string;
+  @ApiPropertyOptional({ enum: ['DRAFT', 'SUBMITTED'] }) @IsOptional() @IsIn(['DRAFT', 'SUBMITTED']) status?: 'DRAFT' | 'SUBMITTED';
 }
+export class UpdateDailyHealthReportDto extends CreateDailyHealthReportDto {}

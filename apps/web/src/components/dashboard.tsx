@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, Bell, CheckCircle2, ChevronRight, Clock3, Pl
 import Link from 'next/link';
 import { api, type Resident } from '@/lib/api';
 import { Badge, Button, Skeleton } from './ui';
+import { canManageResidents, currentAccount } from '@/lib/access';
 
 const fallback: Resident[] = [
   { id: '1', firstName: 'Eleanor', lastName: 'Bennett', preferredName: 'Ellie', room: 'A-104', dateOfBirth: '1941-03-12', status: 'ACTIVE', priority: 'HIGH', allergies: ['Penicillin'], dietaryNeeds: ['Low sodium'], medications: [{ id:'m1', name:'Amlodipine', dosage:'5 mg' }] },
@@ -12,6 +13,7 @@ const fallback: Resident[] = [
 ];
 
 export function Dashboard() {
+  const canAdmit=canManageResidents(currentAccount()?.role);
   const residents = useQuery({ queryKey: ['residents'], queryFn: api.residents });
   const summary = useQuery({ queryKey: ['summary'], queryFn: api.summary });
   const people = residents.data ?? fallback;
@@ -22,7 +24,7 @@ export function Dashboard() {
       <div className="flex items-center gap-2">
         <label className="relative hidden md:block"><Search className="absolute left-3 top-2.5 text-sage" size={18}/><input aria-label="Search residents" placeholder="Search residents..." className="focus-ring h-10 w-64 rounded-xl border bg-white pl-10 pr-4 text-sm"/></label>
         <button aria-label="Notifications" className="focus-ring relative grid h-10 w-10 place-items-center rounded-xl border bg-white"><Bell size={18}/><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-coral"/></button>
-        <Link href="/residents/new" className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-forest px-4 text-sm font-semibold text-white hover:bg-ink"><Plus size={17}/>Admit resident</Link>
+        {canAdmit&&<Link href="/residents/new" className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-forest px-4 text-sm font-semibold text-white hover:bg-ink"><Plus size={17}/>Admit resident</Link>}
       </div>
     </header>
     <div className="mx-auto max-w-[1500px] p-5 md:p-9">

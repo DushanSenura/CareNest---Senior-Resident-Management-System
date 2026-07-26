@@ -324,9 +324,14 @@ class _DetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       title: Text(label, style: Theme.of(context).textTheme.labelMedium),
-      trailing: Flexible(
+      trailing: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.56,
+        ),
         child: Text(
           value,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.end,
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),

@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { api, type Resident } from '@/lib/api';
 import { Badge, Button, Skeleton } from './ui';
+import { canManageResidents, currentAccount } from '@/lib/access';
 
 const demoResidents: Resident[] = [
   { id: '1', firstName: 'Eleanor', lastName: 'Bennett', preferredName: 'Ellie', room: 'A-104', dateOfBirth: '1941-03-12', status: 'ACTIVE', priority: 'HIGH', allergies: ['Penicillin'], dietaryNeeds: ['Low sodium'], medications: [{ id: 'm1', name: 'Amlodipine', dosage: '5 mg' }] },
@@ -21,6 +22,7 @@ const demoResidents: Resident[] = [
 type FilterValue = 'ALL' | Resident['priority'];
 
 export function ResidentsPage() {
+  const canAdmit=canManageResidents(currentAccount()?.role);
   const query = useQuery({ queryKey: ['residents'], queryFn: api.residents });
   const [search, setSearch] = useState('');
   const [careLevel, setCareLevel] = useState<FilterValue>('ALL');
@@ -36,7 +38,7 @@ export function ResidentsPage() {
     <header className="border-b bg-white px-5 py-5 md:px-9">
       <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-4">
         <div><p className="eyebrow">People & care</p><h1 className="mt-1 text-2xl font-bold">Residents</h1><p className="mt-1 text-sm text-sage">Manage resident profiles, care needs and admission details.</p></div>
-        <Link href="/residents/new" className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-forest px-4 text-sm font-semibold text-white hover:bg-ink"><Plus size={17}/>Admit resident</Link>
+        {canAdmit&&<Link href="/residents/new" className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-forest px-4 text-sm font-semibold text-white hover:bg-ink"><Plus size={17}/>Admit resident</Link>}
       </div>
     </header>
 

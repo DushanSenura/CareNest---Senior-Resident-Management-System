@@ -115,6 +115,14 @@ class CareNestApi {
     );
   }
 
+  Future<void> updateHealthReport(String id, Map<String, dynamic> data) async {
+    await _request<Map<String, dynamic>>(
+      '/daily-health/$id',
+      method: 'PATCH',
+      data: data,
+    );
+  }
+
   Future<List<OperationalRecord>> operationalRecords(String module) async {
     final response = await _request<List<dynamic>>('/operations/$module');
     return response
