@@ -1,30 +1,43 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:carenest_mobile/src/app.dart';
+import 'package:carenest_mobile/src/data/models.dart';
+import 'package:carenest_mobile/src/state/session.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:mobile/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('shows staff shell for an authenticated staff account', (
+    tester,
+  ) async {
+    const account = StaffAccount(
+      id: 'staff-1',
+      firstName: 'Maya',
+      lastName: 'Perera',
+      email: 'nurse@carenest.local',
+      role: 'Nurse',
+      branch: 'Willow Grove Residence',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sessionProvider.overrideWith(
+            (_) => _TestSessionController(
+              const SessionState(account: account, restoring: false),
+            ),
+          ),
+        ],
+        child: const CareNestApp(),
+      ),
+    );
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.textContaining('Maya'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Residents'), findsOneWidget);
+    expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Health'), findsOneWidget);
   });
+}
+
+class _TestSessionController extends SessionController {
+  _TestSessionController(SessionState initial) : super.forTest(initial);
 }

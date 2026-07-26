@@ -1169,7 +1169,7 @@ function Choice({
           <button
             key={x}
             onClick={() => set(x)}
-            className={`rounded-xl border px-3 py-2 text-sm capitalize ${value === x ? "border-forest bg-forest text-white" : "bg-white hover:bg-mint"}`}
+            className={`rounded-xl border px-3 py-2 text-sm capitalize ${value === x ? "border-forest bg-forest text-white" : "bg-white text-ink hover:bg-mint"}`}
           >
             {x}
           </button>
