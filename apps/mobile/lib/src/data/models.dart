@@ -270,8 +270,22 @@ class DailyHealthRecord {
     this.pulse,
     this.temperature,
     this.oxygenSaturation,
+    this.respiratoryRate,
+    this.bloodGlucose,
+    this.weight,
+    this.painLevel,
     this.mood,
+    this.appetite,
+    this.hydration,
+    this.sleepQuality,
+    this.mobility,
+    this.bowelStatus,
+    this.urinaryStatus,
+    this.skinCondition,
     this.concerns,
+    this.actionsTaken,
+    this.notes,
+    this.escalation,
   });
 
   final String id;
@@ -285,8 +299,22 @@ class DailyHealthRecord {
   final int? pulse;
   final double? temperature;
   final int? oxygenSaturation;
+  final int? respiratoryRate;
+  final double? bloodGlucose;
+  final double? weight;
+  final int? painLevel;
   final String? mood;
+  final String? appetite;
+  final String? hydration;
+  final String? sleepQuality;
+  final String? mobility;
+  final String? bowelStatus;
+  final String? urinaryStatus;
+  final String? skinCondition;
   final String? concerns;
+  final String? actionsTaken;
+  final String? notes;
+  final String? escalation;
 
   factory DailyHealthRecord.fromJson(Map<String, dynamic> json) {
     final resident = json['resident'] as Map<String, dynamic>? ?? const {};
@@ -306,8 +334,22 @@ class DailyHealthRecord {
       pulse: json['pulse'] as int?,
       temperature: (json['temperature'] as num?)?.toDouble(),
       oxygenSaturation: json['oxygenSaturation'] as int?,
+      respiratoryRate: json['respiratoryRate'] as int?,
+      bloodGlucose: (json['bloodGlucose'] as num?)?.toDouble(),
+      weight: (json['weight'] as num?)?.toDouble(),
+      painLevel: json['painLevel'] as int?,
       mood: json['mood'] as String?,
+      appetite: json['appetite'] as String?,
+      hydration: json['hydration'] as String?,
+      sleepQuality: json['sleepQuality'] as String?,
+      mobility: json['mobility'] as String?,
+      bowelStatus: json['bowelStatus'] as String?,
+      urinaryStatus: json['urinaryStatus'] as String?,
+      skinCondition: json['skinCondition'] as String?,
       concerns: json['concerns'] as String?,
+      actionsTaken: json['actionsTaken'] as String?,
+      notes: json['notes'] as String?,
+      escalation: json['escalation'] as String?,
     );
   }
 }

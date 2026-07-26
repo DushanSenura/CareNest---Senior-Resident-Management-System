@@ -22,6 +22,8 @@ import { TasksShiftsService } from './tasks-shifts/tasks-shifts.service';
 import { SettingsController } from './settings/settings.controller';
 import { SettingsService } from './settings/settings.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { OperationsController } from './operations/operations.controller';
+import { OperationsService } from './operations/operations.service';
 
 @Module({
   imports: [
@@ -39,7 +41,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
       }),
     }),
   ],
-  controllers: [HealthController, ResidentsController, DashboardController, CarePlansController, MedicationsController, StaffController, AuthController, DailyHealthController, TasksShiftsController, SettingsController],
-  providers: [PrismaService, ResidentsService, CarePlansService, MedicationsService, StaffService, AuthService, DailyHealthService, TasksShiftsService, SettingsService, JwtAuthGuard],
+  controllers: [HealthController, ResidentsController, DashboardController, CarePlansController, MedicationsController, StaffController, AuthController, DailyHealthController, TasksShiftsController, SettingsController, OperationsController],
+  providers: [PrismaService, ResidentsService, CarePlansService, MedicationsService, StaffService, AuthService, DailyHealthService, TasksShiftsService, SettingsService, OperationsService, JwtAuthGuard],
 })
 export class AppModule {}

@@ -21,7 +21,7 @@ class SectionHeading extends StatelessWidget {
             ),
           ),
         ),
-        if (action != null) action!,
+        ?action,
       ],
     );
   }

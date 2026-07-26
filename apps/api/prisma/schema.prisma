@@ -44,13 +44,32 @@ enum StaffStatus {
 }
 
 model Facility {
-  id        String     @id @default(cuid())
-  name      String
-  timezone  String     @default("Asia/Colombo")
-  residents Resident[]
-  staff     Staff[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id                 String              @id @default(cuid())
+  name               String
+  timezone           String              @default("Asia/Colombo")
+  residents          Resident[]
+  staff              Staff[]
+  operationalRecords OperationalRecord[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+model OperationalRecord {
+  id          String   @id @default(cuid())
+  facilityId  String
+  facility    Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  module      String
+  title       String
+  subtitle    String?
+  status      String   @default("ACTIVE")
+  data        Json     @default("{}")
+  eventAt     DateTime?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([facilityId, module, status])
+  @@index([facilityId, eventAt])
 }
 
 model Resident {

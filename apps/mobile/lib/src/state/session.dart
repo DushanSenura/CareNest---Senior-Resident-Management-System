@@ -53,6 +53,8 @@ class SessionController extends StateNotifier<SessionState> {
     restore();
   }
 
+  // This constructor avoids secure-storage restoration in widget tests.
+  // ignore: use_super_parameters
   SessionController.forTest(SessionState initial)
     : _api = CareNestApi(),
       super(initial);

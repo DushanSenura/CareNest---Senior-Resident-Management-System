@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../data/models.dart';
 import '../state/session.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
