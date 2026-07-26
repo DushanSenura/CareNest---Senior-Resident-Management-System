@@ -353,3 +353,31 @@ class DailyHealthRecord {
     );
   }
 }
+
+class OperationalRecord {
+  const OperationalRecord({
+    required this.id,
+    required this.title,
+    required this.status,
+    this.subtitle,
+    this.eventAt,
+    this.data = const {},
+  });
+
+  final String id;
+  final String title;
+  final String? subtitle;
+  final String status;
+  final DateTime? eventAt;
+  final Map<String, dynamic> data;
+
+  factory OperationalRecord.fromJson(Map<String, dynamic> json) =>
+      OperationalRecord(
+        id: json['id'] as String? ?? '',
+        title: json['title'] as String? ?? 'Untitled',
+        subtitle: json['subtitle'] as String?,
+        status: json['status'] as String? ?? 'ACTIVE',
+        eventAt: DateTime.tryParse(json['eventAt'] as String? ?? ''),
+        data: json['data'] as Map<String, dynamic>? ?? const {},
+      );
+}

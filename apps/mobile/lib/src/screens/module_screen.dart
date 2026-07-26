@@ -1,364 +1,437 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../data/models.dart';
+import '../state/session.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-class ModuleScreen extends StatelessWidget {
+class ModuleScreen extends ConsumerWidget {
   const ModuleScreen({
     super.key,
     required this.title,
     required this.subtitle,
     required this.icon,
-    required this.features,
-    this.apiBacked = false,
+    this.operationsModule,
+    this.apiPath,
   });
 
   final String title;
   final String subtitle;
   final IconData icon;
-  final List<ModuleFeature> features;
-  final bool apiBacked;
+  final String? operationsModule;
+  final String? apiPath;
 
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: CareNestColors.mint,
-                  child: Icon(icon, color: CareNestColors.forest, size: 28),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final operations = operationsModule;
+    final asyncItems = operations != null
+        ? ref.watch(operationalRecordsProvider(operations))
+        : ref.watch(apiRecordsProvider(apiPath!));
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: operations == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _create(context, ref, operations),
+              icon: const Icon(Icons.add),
+              label: Text('Add ${_singular(title)}'),
+            ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          if (operations != null) {
+            ref.invalidate(operationalRecordsProvider(operations));
+            await ref.read(operationalRecordsProvider(operations).future);
+          } else {
+            ref.invalidate(apiRecordsProvider(apiPath!));
+            await ref.read(apiRecordsProvider(apiPath!).future);
+          }
+        },
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+          children: [
+            _Header(title: title, subtitle: subtitle, icon: icon),
+            const SizedBox(height: 18),
+            SectionHeading('Live $title'),
+            const SizedBox(height: 8),
+            asyncItems.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (error, _) => _ErrorCard(
+                message: error.toString(),
+                retry: () => operations != null
+                    ? ref.invalidate(operationalRecordsProvider(operations))
+                    : ref.invalidate(apiRecordsProvider(apiPath!)),
+              ),
+              data: (items) {
+                if (items.isEmpty) {
+                  return const EmptyState(
+                    icon: Icons.inbox_outlined,
+                    title: 'No records yet',
+                    message: 'Pull down to refresh or use Add to create one.',
+                  );
+                }
+                return Column(
+                  children: items.map((item) {
+                    if (item is OperationalRecord) {
+                      return _OperationalTile(
+                        record: item,
+                        onStatus: (status) => _changeStatus(
+                          context,
+                          ref,
+                          operations!,
+                          item,
+                          status,
                         ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(subtitle),
-                    ],
-                  ),
+                      );
+                    }
+                    return _ApiTile(item: item as Map<String, dynamic>);
+                  }).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _create(
+    BuildContext context,
+    WidgetRef ref,
+    String module,
+  ) async {
+    final titleController = TextEditingController();
+    final detailController = TextEditingController();
+    var status = _statuses(module).first;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Add ${_singular(title)}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Title *'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: detailController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Details'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: status,
+                  decoration: const InputDecoration(labelText: 'Status'),
+                  items: _statuses(module)
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(_pretty(value)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => status = value!),
                 ),
               ],
             ),
           ),
-        ),
-        const SizedBox(height: 20),
-        SectionHeading('$title features'),
-        const SizedBox(height: 8),
-        ...features.map(
-          (feature) => Padding(
-            padding: const EdgeInsets.only(bottom: 9),
-            child: Card(
-              child: ListTile(
-                leading: Icon(feature.icon, color: CareNestColors.forest),
-                title: Text(
-                  feature.title,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: Text(feature.description),
-                trailing: feature.available
-                    ? const Icon(Icons.chevron_right)
-                    : const StatusPill(
-                        'API required',
-                        color: CareNestColors.gold,
-                      ),
-                onTap: feature.available
-                    ? () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${feature.title} selected')),
-                      )
-                    : null,
-              ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
             ),
-          ),
+            FilledButton(
+              onPressed: () {
+                if (titleController.text.trim().length < 2) return;
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('Save'),
+            ),
+          ],
         ),
-        if (!apiBacked) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.sync_problem_outlined,
-                    color: CareNestColors.gold,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'The web version currently keeps this module in browser-local storage. '
-                      'A shared NestJS endpoint is required before web and mobile data can synchronize.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
+      ),
+    );
+    if (accepted != true || !context.mounted) return;
+    try {
+      await ref.read(apiProvider).createOperationalRecord(module, {
+        'title': titleController.text.trim(),
+        'subtitle': detailController.text.trim(),
+        'status': status,
+      });
+      ref.invalidate(operationalRecordsProvider(module));
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Saved successfully')));
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      titleController.dispose();
+      detailController.dispose();
+    }
+  }
+
+  Future<void> _changeStatus(
+    BuildContext context,
+    WidgetRef ref,
+    String module,
+    OperationalRecord record,
+    String status,
+  ) async {
+    try {
+      await ref.read(apiProvider).updateOperationalRecord(module, record.id, {
+        'status': status,
+      });
+      ref.invalidate(operationalRecordsProvider(module));
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 27,
+            backgroundColor: CareNestColors.mint,
+            child: Icon(icon, color: CareNestColors.forest),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 3),
+                Text(subtitle),
+              ],
             ),
           ),
         ],
-      ],
+      ),
+    ),
+  );
+}
+
+class _OperationalTile extends StatelessWidget {
+  const _OperationalTile({required this.record, required this.onStatus});
+  final OperationalRecord record;
+  final ValueChanged<String> onStatus;
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 10),
+    child: ListTile(
+      title: Text(
+        record.title,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(
+        [
+          if (record.subtitle?.isNotEmpty == true) record.subtitle!,
+          if (record.eventAt != null)
+            DateFormat('EEE, d MMM · h:mm a').format(record.eventAt!.toLocal()),
+        ].join('\n'),
+      ),
+      trailing: PopupMenuButton<String>(
+        tooltip: 'Change status',
+        onSelected: onStatus,
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'ACTIVE', child: Text('Active')),
+          PopupMenuItem(value: 'PENDING', child: Text('Pending')),
+          PopupMenuItem(value: 'COMPLETED', child: Text('Completed')),
+          PopupMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+        ],
+        child: StatusPill(_pretty(record.status)),
+      ),
+    ),
+  );
+}
+
+class _ApiTile extends StatelessWidget {
+  const _ApiTile({required this.item});
+  final Map<String, dynamic> item;
+  @override
+  Widget build(BuildContext context) {
+    final resident = item['resident'] as Map<String, dynamic>?;
+    final title =
+        item['title']?.toString() ??
+        item['displayName']?.toString() ??
+        '${item['firstName'] ?? ''} ${item['lastName'] ?? ''}'.trim();
+    final residentName = resident == null
+        ? ''
+        : '${resident['preferredName'] ?? resident['firstName'] ?? ''} ${resident['lastName'] ?? ''}'
+              .trim();
+    final details = [
+      if (residentName.isNotEmpty) residentName,
+      if (item['role'] != null) item['role'].toString(),
+      if (item['branch'] != null) item['branch'].toString(),
+      if (item['goals'] != null) item['goals'].toString(),
+      if (item['email'] != null) item['email'].toString(),
+    ];
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Text(title.isEmpty ? '?' : title[0].toUpperCase()),
+        ),
+        title: Text(
+          title.isEmpty ? 'Record' : title,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: details.isEmpty
+            ? null
+            : Text(
+                details.join(' · '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+        trailing: item['status'] == null
+            ? const Icon(Icons.chevron_right)
+            : StatusPill(_pretty(item['status'].toString())),
+      ),
     );
   }
 }
 
-class ModuleFeature {
-  const ModuleFeature(
-    this.title,
-    this.description,
-    this.icon, {
-    this.available = false,
-  });
-
-  final String title;
-  final String description;
-  final IconData icon;
-  final bool available;
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message, required this.retry});
+  final String message;
+  final VoidCallback retry;
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        children: [
+          const Icon(Icons.cloud_off_outlined, size: 36),
+          const SizedBox(height: 8),
+          Text(message, textAlign: TextAlign.center),
+          TextButton.icon(
+            onPressed: retry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    ),
+  );
 }
+
+String _singular(String value) => value.endsWith('s')
+    ? value.substring(0, value.length - 1).toLowerCase()
+    : value.toLowerCase();
+String _pretty(String value) => value
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .split(' ')
+    .map(
+      (part) =>
+          part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}',
+    )
+    .join(' ');
+List<String> _statuses(String module) => module == 'messages'
+    ? const ['UNREAD', 'READ', 'ARCHIVED']
+    : module == 'billing'
+    ? const ['PENDING', 'PAID', 'OVERDUE']
+    : module == 'announcements'
+    ? const ['DRAFT', 'PUBLISHED', 'ARCHIVED']
+    : const ['ACTIVE', 'PENDING', 'COMPLETED', 'INACTIVE'];
 
 abstract final class MobileModules {
   static const carePlans = ModuleScreen(
     title: 'Care plans',
-    subtitle: 'Resident goals, guidance, priorities, and reviews.',
+    subtitle: 'Live resident goals, guidance, priorities, and reviews.',
     icon: Icons.volunteer_activism_outlined,
-    apiBacked: true,
-    features: [
-      ModuleFeature(
-        'View care plans',
-        'Review current resident plans.',
-        Icons.assignment_outlined,
-      ),
-      ModuleFeature(
-        'Create care plan',
-        'Add goals and care guidance.',
-        Icons.add_task_outlined,
-      ),
-      ModuleFeature(
-        'Review schedule',
-        'Monitor upcoming review dates.',
-        Icons.event_repeat_outlined,
-      ),
-    ],
+    apiPath: '/care-plans',
   );
-
   static const staff = ModuleScreen(
     title: 'Staff',
-    subtitle: 'Employees, roles, branches, and account status.',
+    subtitle: 'Live employees, roles, branches, and account status.',
     icon: Icons.badge_outlined,
-    apiBacked: true,
-    features: [
-      ModuleFeature(
-        'Staff directory',
-        'Search active staff.',
-        Icons.people_outline,
-      ),
-      ModuleFeature(
-        'Staff status',
-        'Review leave and account status.',
-        Icons.toggle_on,
-      ),
-      ModuleFeature(
-        'Branch assignment',
-        'View workplace assignments.',
-        Icons.account_tree_outlined,
-      ),
-    ],
+    apiPath: '/staff',
   );
-
   static const schedule = ModuleScreen(
     title: 'Schedule',
     subtitle: 'Appointments, activities, visits, tasks, and meetings.',
     icon: Icons.calendar_month_outlined,
-    features: [
-      ModuleFeature(
-        'Weekly calendar',
-        'Browse the Monday-first week.',
-        Icons.view_week,
-      ),
-      ModuleFeature(
-        'Appointments',
-        'Resident appointments and clinical visits.',
-        Icons.event_available_outlined,
-      ),
-      ModuleFeature(
-        'Activities',
-        'Recreation and community activities.',
-        Icons.celebration_outlined,
-      ),
-    ],
+    operationsModule: 'schedule',
   );
-
   static const reports = ModuleScreen(
     title: 'Reports',
-    subtitle: 'Resident, care, clinical, and operational reporting.',
+    subtitle: 'Live resident and care-plan reporting data.',
     icon: Icons.analytics_outlined,
-    apiBacked: true,
-    features: [
-      ModuleFeature(
-        'Resident reports',
-        'Resident and admission data.',
-        Icons.people,
-      ),
-      ModuleFeature(
-        'Care reports',
-        'Tasks and daily-health activity.',
-        Icons.monitor_heart_outlined,
-      ),
-      ModuleFeature(
-        'Export',
-        'CSV, Excel, and PDF exports are on the web app.',
-        Icons.download_outlined,
-      ),
-    ],
+    apiPath: '/care-plans',
   );
-
   static const branches = ModuleScreen(
     title: 'Branches',
     subtitle: 'Residence branches and operational capacity.',
     icon: Icons.apartment_outlined,
-    features: [
-      ModuleFeature(
-        'Branch directory',
-        'Locations and contact information.',
-        Icons.business_outlined,
-      ),
-      ModuleFeature(
-        'Capacity',
-        'Resident and staff totals.',
-        Icons.bedroom_parent_outlined,
-      ),
-      ModuleFeature(
-        'Branch status',
-        'Active and inactive locations.',
-        Icons.toggle_on,
-      ),
-    ],
+    operationsModule: 'branches',
   );
-
   static const announcements = ModuleScreen(
     title: 'Announcements',
     subtitle: 'Facility-wide staff communication.',
     icon: Icons.campaign_outlined,
-    features: [
-      ModuleFeature(
-        'Published announcements',
-        'Read current staff notices.',
-        Icons.feed_outlined,
-      ),
-      ModuleFeature(
-        'Scheduled notices',
-        'Review upcoming announcements.',
-        Icons.schedule_send_outlined,
-      ),
-      ModuleFeature(
-        'Create announcement',
-        'Compose and target a notice.',
-        Icons.post_add_outlined,
-      ),
-    ],
+    operationsModule: 'announcements',
   );
-
   static const auditLogs = ModuleScreen(
     title: 'Audit logs',
     subtitle: 'System activity, actors, actions, and status.',
     icon: Icons.policy_outlined,
-    features: [
-      ModuleFeature(
-        'Activity register',
-        'Search role and action events.',
-        Icons.manage_search,
-      ),
-      ModuleFeature(
-        'Developer terminal',
-        'Use audit terminal commands on web.',
-        Icons.terminal,
-      ),
-      ModuleFeature(
-        'Export log',
-        'Download filtered audit records.',
-        Icons.download,
-      ),
-    ],
+    operationsModule: 'audit-logs',
   );
-
   static const billing = ModuleScreen(
     title: 'Billing',
     subtitle: 'Invoices, balances, receipts, and payments.',
     icon: Icons.receipt_long_outlined,
-    features: [
-      ModuleFeature(
-        'Resident invoices',
-        'Review totals and balances.',
-        Icons.receipt,
-      ),
-      ModuleFeature(
-        'Record payment',
-        'Card, transfer, cheque, cash, or online.',
-        Icons.payments_outlined,
-      ),
-      ModuleFeature(
-        'Receipts',
-        'Attach and review payment receipts.',
-        Icons.attach_file,
-      ),
-    ],
+    operationsModule: 'billing',
   );
-
   static const accounts = ModuleScreen(
     title: 'Accounts',
     subtitle: 'System login accounts and resident guest access.',
     icon: Icons.manage_accounts_outlined,
-    apiBacked: true,
-    features: [
-      ModuleFeature(
-        'Account directory',
-        'Staff login accounts.',
-        Icons.badge_outlined,
-      ),
-      ModuleFeature(
-        'Guest account',
-        'Resident-linked family access.',
-        Icons.person_add_alt_outlined,
-      ),
-      ModuleFeature(
-        'Account status',
-        'Active and suspended accounts.',
-        Icons.security,
-      ),
-    ],
+    apiPath: '/staff',
   );
-
   static const messages = ModuleScreen(
     title: 'Messages',
     subtitle: 'Secure staff and team communication.',
     icon: Icons.chat_bubble_outline,
-    features: [
-      ModuleFeature(
-        'Conversations',
-        'Staff and team message threads.',
-        Icons.forum,
-      ),
-      ModuleFeature(
-        'New message',
-        'Start a staff conversation.',
-        Icons.edit_note,
-      ),
-      ModuleFeature(
-        'Attachments',
-        'Attach documents and images.',
-        Icons.attach_file_outlined,
-      ),
-    ],
+    operationsModule: 'messages',
   );
 }

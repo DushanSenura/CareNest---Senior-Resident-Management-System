@@ -115,6 +115,41 @@ class CareNestApi {
     );
   }
 
+  Future<List<OperationalRecord>> operationalRecords(String module) async {
+    final response = await _request<List<dynamic>>('/operations/$module');
+    return response
+        .map((item) => OperationalRecord.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> createOperationalRecord(
+    String module,
+    Map<String, dynamic> data,
+  ) async {
+    await _request<Map<String, dynamic>>(
+      '/operations/$module',
+      method: 'POST',
+      data: data,
+    );
+  }
+
+  Future<void> updateOperationalRecord(
+    String module,
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    await _request<Map<String, dynamic>>(
+      '/operations/$module/$id',
+      method: 'PATCH',
+      data: data,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> records(String path) async {
+    final response = await _request<List<dynamic>>(path);
+    return response.cast<Map<String, dynamic>>();
+  }
+
   Future<T> _request<T>(
     String path, {
     String method = 'GET',

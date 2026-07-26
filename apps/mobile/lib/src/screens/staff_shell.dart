@@ -129,6 +129,8 @@ class _StaffShellState extends ConsumerState<StaffShell> {
     ref.invalidate(tasksProvider);
     ref.invalidate(healthReportsProvider);
     ref.invalidate(medicationsProvider);
+    ref.invalidate(operationalRecordsProvider);
+    ref.invalidate(apiRecordsProvider);
   }
 
   String _greeting(String name) {

@@ -169,3 +169,13 @@ final healthReportsProvider = FutureProvider<List<DailyHealthRecord>>(
 final summaryProvider = FutureProvider<DashboardSummary>(
   (ref) => ref.read(apiProvider).summary(),
 );
+
+final operationalRecordsProvider = FutureProvider.autoDispose
+    .family<List<OperationalRecord>, String>(
+      (ref, module) => ref.read(apiProvider).operationalRecords(module),
+    );
+
+final apiRecordsProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>(
+      (ref, path) => ref.read(apiProvider).records(path),
+    );
